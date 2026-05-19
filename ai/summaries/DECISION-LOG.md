@@ -1,0 +1,152 @@
+# Decision Log
+
+## Guidelines
+
+This is the **append-only decision log** for ZeroTrading. Every meaningful design choice, fix, pivot, accounting correction, or strategy change gets a new entry here.
+
+Why append-only:
+- Decisions over time form the institutional memory of the project.
+- Future agents and operators need to understand *why* things are the way they are.
+- Reversing a prior decision means appending a new entry that explicitly supersedes it.
+
+## Entry format
+
+Each entry should follow this shape:
+
+```
+## YYYY-MM-DD HH:MM ET - <short title>
+
+**Author:** <human or agent name>
+**Session:** <link or filename of session summary in ai/summaries/>
+**Status:** decided | proposed | superseded by <date>
+**Scope:** strategy | execution | accounting | architecture | docs | ops | research
+
+### Context
+What triggered this decision. What was unclear, broken, or being debated.
+
+### Decision
+What was decided, in plain language. One sentence if possible.
+
+### Rationale
+Why this choice over alternatives.
+
+### Consequences
+What changes downstream because of this. Risks. Open follow-ups.
+
+### Related files
+- <path/to/file1>
+- <path/to/file2>
+```
+
+## Rules
+
+1. **Never delete entries.** Supersede them by appending a new entry that references the old one.
+2. **Date entries in ET** to match the operator's primary timezone.
+3. **Link to the session summary** in `ai/summaries/` that produced the decision.
+4. **Keep entries short.** Long context belongs in the session summary; the log is the index.
+5. **Tag scope** so we can filter later (strategy, execution, accounting, architecture, docs, ops, research).
+
+---
+
+## 2026-05-19 17:00 ET - Initialize AI-first repo scaffold
+
+**Author:** Comet (Perplexity) + operator
+**Session:** Initial scaffold session (multi-turn)
+**Status:** decided
+**Scope:** docs, architecture
+
+### Context
+Work across multiple sessions and agents had been losing context between turns. The repo needed an AI-first structure with prompts, handoffs, checklists, evals, schemas, and authoritative design references separated from product code.
+
+### Decision
+Adopt an AI-first repo layout with:
+- `ai/system/` for canonical agent specs
+- `ai/prompts/` for reusable master prompts
+- `ai/handoffs/` for session templates
+- `ai/checklists/` for non-negotiable contracts
+- `ai/summaries/` for session outputs and this decision log
+- `ai/evals/` and `ai/schemas/` for measurable quality
+- `docs/pdfs/` for authoritative design PDFs
+- `docs/diagrams/` for visual architecture artifacts
+- `ops/runbooks/` for traditional ops docs
+- `research/logs/` for monitoring archive
+- `.cursor/rules/` for Cursor-specific agent rules
+
+### Rationale
+Dual goals: (1) keep AI agents aligned across sessions and tools, (2) preserve traditional SaaS hygiene. Mirrors patterns from prompt-engineering and Cursor rule guidance.
+
+### Consequences
+- All future sessions must end with a fresh-session summary in `ai/summaries/` and a decision log entry when appropriate.
+- Strategy and code modules should reference protected PDFs as design source of truth.
+- The repo is intentionally documentation-first; code lands behind docs.
+
+### Related files
+- `README.md`
+- `ai/system/MODEL-SPEC.md`
+- `ai/system/OPEN-OPSEC-POLICY.md`
+- `ai/system/REPO-PRINCIPLES.md`
+- `ai/handoffs/FRESH-SESSION-TEMPLATE.md`
+- `ai/checklists/SESSION-OUTPUT-CONTRACT.md`
+- `docs/diagrams/README.md`
+- `docs/pdfs/README.md`
+
+---
+
+## 2026-05-19 17:00 ET - Open-knowledge + OpSec posture
+
+**Author:** Comet (Perplexity) + operator
+**Session:** Initial scaffold session
+**Status:** decided
+**Scope:** docs, ops
+
+### Context
+Operator wants ZeroTrading to be genuinely open like Wikipedia (no fake openness, no missing core files, no hidden algorithms) while still maintaining strong operational security around secrets, infrastructure, and exploit-enabling details.
+
+### Decision
+Adopt a hybrid posture:
+- **OPEN:** code, algorithms, architecture, research methods, docs, schemas
+- **PRIVATE:** secrets, credentials, account-specific runtime data, exploit-enabling live operational details
+
+Moat comes from execution quality, data discipline, operator UX, and research compounding - not from hiding important parts.
+
+### Rationale
+Matches operator's ethical stance, differentiates from "published recipe / private code" patterns like Mystic, and is compatible with open-source security best practices.
+
+### Consequences
+- README and AI system docs must clearly state this posture.
+- SECURITY.md governs threat model and secret handling.
+- No README theater - if a feature is described, the code should exist.
+
+### Related files
+- `README.md`
+- `SECURITY.md`
+- `ai/system/OPEN-OPSEC-POLICY.md`
+
+---
+
+## 2026-05-19 17:00 ET - Launch wedge = Mystic-style KXBTC15M
+
+**Author:** Comet (Perplexity) + operator
+**Session:** Initial scaffold session
+**Status:** decided
+**Scope:** strategy
+
+### Context
+Multiple candidate strategies exist (BTC hourly, weather, arbitrage, sports). Operator needs one focused launch wedge to demonstrate viability and generate revenue while broader platform builds.
+
+### Decision
+Flagship launch strategy is a Mystic-inspired KXBTC15M late-window sniper running on the ZeroTrading Core shell. BTC hourly models remain as secondary references. Weather and arb are roadmap items, not launch items.
+
+### Rationale
+- Mystic recipe is the most concrete published-claim strategy with credible documented results.
+- KXBTC15M is fast, demo-friendly, and emotionally legible.
+- Existing core shell already supports execution lifecycle and accounting needed.
+
+### Consequences
+- All launch-track engineering effort prioritizes this strategy.
+- A `docs/STRATEGY-KXBTC15M.md` should be created to capture the exact recipe and parameters.
+- Risk controls (entry window, RSI band, volatility cap, balance tiers, cooldown) must be encoded.
+
+### Related files
+- `ai/prompts/BUILD-LAUNCH-BOT.md`
+- `docs/STRATEGY-KXBTC15M.md` (to be created)
