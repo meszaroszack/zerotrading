@@ -1,85 +1,76 @@
-
 # ZeroTrading
 
-ZeroTrading is an AI-first, open-knowledge prediction market platform focused on Kalshi BTC 15-minute (KXBTC15M) markets, BTC hourly markets, weather, and sports/event systems.
+> AI-first, open-knowledge prediction market platform built on Kalshi.
 
-This repo is designed as a hybrid of modern AI-agent best practices and traditional SaaS / GitHub structure. It assumes deployment on Railway with Supabase for persistence and analytics.
+ZeroTrading is an open-source operating platform for short-duration prediction markets. The immediate focus is KXBTC15M (Kalshi BTC 15-minute markets), BTC hourly strategies, weather markets, and sports/event systems. The broader mission is to become the most transparent and comprehensive knowledge base for prediction market behavior.
 
-## What is this?
+## Architecture
 
-ZeroTrading is not just a trading bot. It is a **prediction-market operating system** with:
+The platform is built around a hardened execution and accounting core (ZeroTrading Core) with pluggable strategy modules. All deployment is via **Railway**, all persistence and analytics via **Supabase**.
 
-- A hardened execution and accounting shell (ZeroTrading Core)
-- Pluggable strategy modules (KXBTC15M Mystic-style first, BTC hourly, weather, sports)
-- A 24/7 market monitoring and anomaly detection layer
-- An open-knowledge research archive — algorithms, architecture, and methods are fully public
-- An AI-agent-first contribution model where every session must update this repo
+```
+Ingestion Layer (Binance + Kalshi)
+    ↓
+Strategy Context Engine
+    ↓
+Strategy Modules (KXBTC15M | BTC Hourly | Weather | Sports)
+    ↓
+Risk Engine
+    ↓
+Execution State Machine ← (protected core)
+    ↓
+Kalshi Exchange
+    ↓
+Reconciliation ← (protected core)
+    ↓
+Accounting + Audit Log ← (protected core)
+    ↓
+Operator Dashboard + Research / Monitoring Layer
+```
 
-## Quick Start
+See `docs/ARCHITECTURE-ZEROTRADING-CORE.md` for full architecture detail and links to PDF design references.
 
-> Deployment: Railway + Supabase  
-> See `ops/runbooks/RAILWAY-DEPLOYMENT.md` for setup
+## If You Are an AI Agent
 
-## For AI Agents
-
-If you are an AI agent (Perplexity, Cursor, Claude Code, or any other), read these before touching any code:
+Read these files first, in order:
 
 1. `ai/system/README-AI-SYSTEM.md`
 2. `ai/system/MODEL-SPEC.md`
 3. `ai/system/OPEN-OPSEC-POLICY.md`
-4. `docs/ARCHITECTURE-ZEROTRADING-CORE.md`
+4. `ai/system/REPO-PRINCIPLES.md`
+5. `docs/ARCHITECTURE-ZEROTRADING-CORE.md`
 
-Then copy and use the master prompt at `ai/prompts/MASTER-CROSS-MODEL-PROMPT.md`.
+Then consult `ai/prompts/MASTER-PROMPT.md` for the copy-paste operating prompt used across all agents.
 
-**Every agent session must update this repo** — decision log, fresh session summary, and relevant docs.
+Every session must end with an update to `ai/summaries/DECISION-LOG.md` and a fresh-session summary using `ai/handoffs/FRESH-SESSION-TEMPLATE.md`.
 
-## For Humans
+## Strategy Priorities
 
-- Strategy rationale and design: `docs/`
-- Architecture: `docs/ARCHITECTURE-ZEROTRADING-CORE.md`
-- Contribution guide: `CONTRIBUTING.md`
-- Deployment: `ops/runbooks/RAILWAY-DEPLOYMENT.md`
-- Research: `research/`
+| Priority | Strategy | Status |
+|---|---|---|
+| 1 | Mystic-style KXBTC15M late-window bot | In development |
+| 2 | BTC hourly models (existing, needs accounting fix) | Stabilizing |
+| 3 | Adapted models from GitHub, sports, weather | Research phase |
+| 4 | 24/7 market monitoring and anomaly analytics | Parallel build |
 
-## Repo Structure
+## Platform Goals
 
-```
-/
-├─ .cursor/rules/         # Cursor AI agent rules
-├─ ai/
-│  ├─ system/             # Canonical AI agent specs and policies
-│  ├─ prompts/            # Master prompts for all AI tools
-│  ├─ handoffs/           # Session handoff templates
-│  ├─ checklists/         # Non-negotiable output contracts
-│  ├─ specs/              # Strategy and feature specs
-│  ├─ evals/              # Evaluation test cases
-│  ├─ summaries/          # Decision log and session summaries
-│  └─ schemas/            # JSON schemas for structured agent output
-├─ docs/
-│  ├─ pdfs/               # Authoritative architecture and design PDFs
-│  ├─ ARCHITECTURE-ZEROTRADING-CORE.md
-│  ├─ STRATEGY-KXBTC15M.md
-│  ├─ STRATEGY-BTC-HOURLY.md
-│  └─ MONITORING-OVERVIEW.md
-├─ ops/
-│  └─ runbooks/           # Deployment and operational runbooks
-├─ research/
-│  ├─ logs/               # JSONL market behavior logs
-│  └─ MONITORING-OVERVIEW.md
-├─ src/                   # Application source code
-├─ CONTRIBUTING.md
-├─ LICENSE
-└─ SECURITY.md
-```
+- **Full transparency**: no hidden algorithm files, no README theater.
+- **Reproducible research**: every strategy, observation, and finding documented.
+- **AI-first workflow**: agents contribute directly to the repo with documentation.
+- **Market intelligence**: always-on monitoring of Kalshi markets for anomalies, behavior patterns, and cross-venue signals.
+- **Open knowledge**: operate like Wikipedia for prediction market research.
 
-## Principles
+## Deployment
 
-- **Documentation and approval first** — design is documented before implementation
-- **Open knowledge** — no hidden algorithm files, no README theater
-- **Operational security** — secrets, credentials, and live infra details are never committed
-- **AI-agent first** — prompts, rules, handoffs, evals, and schemas are first-class repo citizens
-- **Exchange truth wins** — reconciliation to Kalshi is the authoritative source for positions and P&L
+- App: [Railway](https://railway.app)
+- Persistence + Analytics: [Supabase](https://supabase.com)
+- Live app: https://zerotrading-core-production.up.railway.app
 
-## Status
+## Contributing
 
-> Active development. See `ai/summaries/DECISION-LOG.md` for latest decisions and progress.
+See `CONTRIBUTING.md`. Humans and AI agents follow the same contribution rules.
+
+## License
+
+MIT — see `LICENSE`.
