@@ -1,0 +1,216 @@
+# Strategy Decision Eval Cases
+#
+# Guidelines:
+# This file holds testable scenarios for ZeroTrading's strategy decision engine.
+# Each case describes a market state and the expected decision (trade or skip)
+# with the expected reason. These cases are used by replay/backtest tooling
+# and by unit tests for the strategy modules.
+#
+# Rules:
+# - Cases must be reproducible: no randomness, no live API calls.
+# - When a strategy parameter changes, update the relevant cases here.
+# - Add new cases for every bug fix that came from a real-world failure.
+# - Group by strategy (kxbtc15m_late_window, kxbtc15m_yolo, btc_hourly, etc).
+# - Keep prices in cents (Kalshi convention) and BTC in USD.
+#
+# Schema:
+#   id: unique kebab-case identifier
+#   strategy: which strategy module owns this case
+#   description: human-readable summary
+#   inputs:
+#     minutes_to_settlement: float
+#     yes_bid_cents: int 0..100
+#     yes_ask_cents: int 0..100
+#     no_bid_cents: int 0..100
+#     no_ask_cents: int 0..100
+#     spread_cents: int
+#     rsi_9: float 0..100
+#     btc_5candle_range_usd: float
+#     strike_distance_pct: float
+#     account_balance_usd: float
+#     session_window: pre_market | regular | after_hours
+#   expected:
+#     decision: TRADE | NO_TRADE
+#     side: YES | NO | null
+#     reason_tags: [list of expected reason codes]
+
+cases:
+  - id: kxbtc15m-late-window-clean-yes-entry
+    strategy: kxbtc15m_late_window
+    description: Clean YES entry inside the late window with tight spread and stable RSI.
+    inputs:
+      minutes_to_settlement: 4.0
+      yes_bid_cents: 94
+      yes_ask_cents: 96
+      no_bid_cents: 4
+      no_ask_cents: 6
+      spread_cents: 2
+      rsi_9: 55.0
+      btc_5candle_range_usd: 180.0
+      strike_distance_pct: 0.6
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: TRADE
+      side: YES
+      reason_tags: [in_entry_window, price_band_ok, rsi_band_ok, vol_ok]
+
+  - id: kxbtc15m-skip-too-early
+    strategy: kxbtc15m_late_window
+    description: More than 6 minutes to settlement, outside entry window.
+    inputs:
+      minutes_to_settlement: 9.5
+      yes_bid_cents: 95
+      yes_ask_cents: 96
+      no_bid_cents: 4
+      no_ask_cents: 5
+      spread_cents: 1
+      rsi_9: 60.0
+      btc_5candle_range_usd: 150.0
+      strike_distance_pct: 0.5
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: NO_TRADE
+      side: null
+      reason_tags: [outside_entry_window_too_early]
+
+  - id: kxbtc15m-skip-too-late
+    strategy: kxbtc15m_late_window
+    description: Less than 2 minutes to settlement, past entry window.
+    inputs:
+      minutes_to_settlement: 1.4
+      yes_bid_cents: 95
+      yes_ask_cents: 97
+      no_bid_cents: 3
+      no_ask_cents: 5
+      spread_cents: 2
+      rsi_9: 55.0
+      btc_5candle_range_usd: 160.0
+      strike_distance_pct: 0.5
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: NO_TRADE
+      side: null
+      reason_tags: [outside_entry_window_too_late]
+
+  - id: kxbtc15m-skip-price-below-band
+    strategy: kxbtc15m_late_window
+    description: Price band is 93-98c; YES bid at 88c is below band.
+    inputs:
+      minutes_to_settlement: 3.5
+      yes_bid_cents: 88
+      yes_ask_cents: 90
+      no_bid_cents: 10
+      no_ask_cents: 12
+      spread_cents: 2
+      rsi_9: 55.0
+      btc_5candle_range_usd: 170.0
+      strike_distance_pct: 0.7
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: NO_TRADE
+      side: null
+      reason_tags: [price_below_band]
+
+  - id: kxbtc15m-skip-vol-too-high
+    strategy: kxbtc15m_late_window
+    description: BTC 5-candle range exceeds the 300 USD volatility cap.
+    inputs:
+      minutes_to_settlement: 4.0
+      yes_bid_cents: 95
+      yes_ask_cents: 97
+      no_bid_cents: 3
+      no_ask_cents: 5
+      spread_cents: 2
+      rsi_9: 50.0
+      btc_5candle_range_usd: 420.0
+      strike_distance_pct: 0.5
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: NO_TRADE
+      side: null
+      reason_tags: [vol_too_high]
+
+  - id: kxbtc15m-skip-rsi-extreme-cooldown
+    strategy: kxbtc15m_late_window
+    description: RSI is in extreme zone; recovery cooldown blocks entry.
+    inputs:
+      minutes_to_settlement: 4.0
+      yes_bid_cents: 96
+      yes_ask_cents: 98
+      no_bid_cents: 2
+      no_ask_cents: 4
+      spread_cents: 2
+      rsi_9: 88.0
+      btc_5candle_range_usd: 200.0
+      strike_distance_pct: 0.5
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: NO_TRADE
+      side: null
+      reason_tags: [rsi_extreme, recovery_cooldown_active]
+
+  - id: kxbtc15m-skip-saturated-no-ask
+    strategy: kxbtc15m_late_window
+    description: NO ask saturated at 0c with extreme spread; reject as fake-edge state.
+    inputs:
+      minutes_to_settlement: 3.0
+      yes_bid_cents: 99
+      yes_ask_cents: 100
+      no_bid_cents: 0
+      no_ask_cents: 0
+      spread_cents: 99
+      rsi_9: 70.0
+      btc_5candle_range_usd: 200.0
+      strike_distance_pct: 0.5
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: NO_TRADE
+      side: null
+      reason_tags: [saturated_book, spread_too_wide]
+
+  - id: kxbtc15m-skip-safety-floor
+    strategy: kxbtc15m_late_window
+    description: Account balance below safety floor; refuse all entries.
+    inputs:
+      minutes_to_settlement: 4.0
+      yes_bid_cents: 95
+      yes_ask_cents: 97
+      no_bid_cents: 3
+      no_ask_cents: 5
+      spread_cents: 2
+      rsi_9: 55.0
+      btc_5candle_range_usd: 180.0
+      strike_distance_pct: 0.6
+      account_balance_usd: 25.0
+      session_window: regular
+    expected:
+      decision: NO_TRADE
+      side: null
+      reason_tags: [safety_floor_breached]
+
+  - id: kxbtc15m-yolo-97-entry
+    strategy: kxbtc15m_yolo
+    description: YOLO sniper fires at 97c inside final 3 minutes.
+    inputs:
+      minutes_to_settlement: 2.5
+      yes_bid_cents: 97
+      yes_ask_cents: 98
+      no_bid_cents: 2
+      no_ask_cents: 3
+      spread_cents: 1
+      rsi_9: 60.0
+      btc_5candle_range_usd: 150.0
+      strike_distance_pct: 0.4
+      account_balance_usd: 500.0
+      session_window: regular
+    expected:
+      decision: TRADE
+      side: YES
+      reason_tags: [in_yolo_window, price_in_97_98_band, vol_ok]
