@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/meszaroszack/zerotrading/ai/schemas/session-summary.schema.json",
+  "title": "ZeroTrading Session Summary",
+  "description": "Structured shape for end-of-session summaries produced by AI agents and human operators working in the ZeroTrading repo. Pair with ai/handoffs/FRESH-SESSION-TEMPLATE.md.",
+  "type": "object",
+  "required": [
+    "session_metadata",
+    "objective",
+    "checklist",
+    "findings",
+    "risks_blockers",
+    "next_prompt"
+  ],
+  "properties": {
+    "session_metadata": {
+      "type": "object",
+      "required": ["datetime_et", "agent", "operator", "branch", "mode"],
+      "properties": {
+        "datetime_et": {
+          "type": "string",
+          "description": "ISO 8601 datetime in ET (e.g. 2026-05-19T17:00:00-04:00)"
+        },
+        "agent": {
+          "type": "string",
+          "description": "Which AI agent ran this session (e.g. 'Comet/Perplexity', 'Cursor/Claude', 'Manual')"
+        },
+        "operator": {
+          "type": "string",
+          "description": "Human operator name or handle"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Git branch worked on"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["paper", "safe-live", "live", "docs-only", "research-only"],
+          "description": "Operational mode this session was in"
+        }
+      }
+    },
+    "objective": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "One or two sentences describing what this session was trying to accomplish."
+    },
+    "checklist": {
+      "type": "object",
+      "description": "Status of session-output-contract checklist items.",
+      "properties": {
+        "read_system_docs": { "type": "boolean" },
+        "reviewed_pdfs": { "type": "boolean" },
+        "reviewed_decision_log": { "type": "boolean" },
+        "changes_scoped": { "type": "boolean" },
+        "docs_updated": { "type": "boolean" },
+        "tests_or_evals_updated": { "type": "boolean" },
+        "decision_log_appended": { "type": "boolean" },
+        "handoff_summary_committed": { "type": "boolean" }
+      }
+    },
+    "findings": {
+      "type": "object",
+      "required": ["files_inspected", "files_modified", "decisions_made"],
+      "properties": {
+        "files_inspected": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "files_modified": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "files_created": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "decisions_made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["summary", "scope"],
+            "properties": {
+              "summary": { "type": "string" },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "strategy",
+                  "execution",
+                  "accounting",
+                  "architecture",
+                  "docs",
+                  "ops",
+                  "research",
+                  "security"
+                ]
+              },
+              "decision_log_link": { "type": "string" }
+            }
+          }
+        },
+        "bugs_fixed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description"],
+            "properties": {
+              "description": { "type": "string" },
+              "root_cause": { "type": "string" },
+              "fix_summary": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "risks_blockers": {
+      "type": "array",
+      "description": "Unresolved risks, ambiguities, or items needing operator approval.",
+      "items": {
+        "type": "object",
+        "required": ["description", "severity"],
+        "properties": {
+          "description": { "type": "string" },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "owner": { "type": "string" },
+          "requires_human": { "type": "boolean" }
+        }
+      }
+    },
+    "next_prompt": {
+      "type": "string",
+      "description": "Literal copy-paste prompt the next agent should run to continue this work."
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "references": {
+      "type": "object",
+      "properties": {
+        "pdfs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "prior_summaries": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
