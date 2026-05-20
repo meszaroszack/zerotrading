@@ -1,0 +1,13 @@
+---
+description: ZeroTrading core product invariants
+alwaysApply: true
+---
+# Core Product Rules
+
+- Flagship: KXBTC15M (Kalshi BTC 15-min), Mystic-style launch wedge.
+- Secondary: BTC hourly, weather markets, sports/event systems.
+- Modes: paper -> safe-live -> live. Never skip safe-live.
+- Restart-safe: all execution state persisted.
+- Accounting: fees, slippage, corrections reconciled vs exchange.
+- Authoritative refs: docs/pdfs/ and docs/ARCHITECTURE-ZEROTRADING-CORE.md.
+- FSM / accounting deviations require DECISION-LOG entry.
