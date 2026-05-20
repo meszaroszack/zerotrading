@@ -313,6 +313,33 @@ User identified a critical error: all AI-generated KXBTC15M analysis incorrectly
 
 ### Next
 
+
+---
+
+## 2026-05-20 01:15 ET - Kalshi market taxonomy: KXBTCD hourly vs KXBTC15M 15-min
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** Market structure documentation
+**Status:** decided
+**Scope:** guardrails | docs | architecture
+
+### Context
+
+User identified that the live Railway deployment (`zerotrading-core-production.up.railway.app`) targets KXBTCD (hourly), which is a DIFFERENT market than KXBTC15M (15-min). KXBTCD has a ladder of strike prices where you choose a threshold level. KXBTC15M is a simple up/down from the current price. The repo needs to clearly distinguish these and prevent any AI agent from confusing them.
+
+### Decision
+
+1. Created `ai/guardrails/KALSHI-MARKET-REFERENCE.md` - Comprehensive reference covering KXBTCD hourly (ladder, threshold selection, strike distance), KXBTC15M 15-min (single strike, over/under), BTC Price Range (true brackets), settlement mechanics (60s CFB RTI average), fee structure, and common AI errors.
+2. Updated `ai/guardrails/KXBTC15M-MARKET-STRUCTURE.md` - Added cross-reference to the market reference doc.
+3. Updated `ai/handoffs/CURRENT-STATE.md` - Now shows both systems (KXBTCD LIVE on Railway, KXBTC15M planned), live bot status ($4.16 balance, 0 cycles, NO_TRADE decisions), and explicit market distinction table.
+
+### Consequences
+
+- Repo now clearly distinguishes the two target markets at every entry point.
+- Live KXBTCD bot status is documented (connected, evaluating, mostly NO_TRADE).
+- CURRENT-STATE now leads with a mandatory market table so any agent immediately knows which system targets which market.
+- Do-not-regress list now includes "KXBTCD and KXBTC15M are different markets."
+- Kalshi fee structure documented: maker orders have NO fees, settlement has NO fees. This is a critical strategic advantage.
 - Update CURRENT-STATE.md.
 - Wire guardrail into MASTER-PROMPT and .cursor/rules.
 - User confirms language choice and begins implementation with correct model.
