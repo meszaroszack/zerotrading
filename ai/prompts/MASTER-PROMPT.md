@@ -1,18 +1,17 @@
-# Master Cross-Agent Prompt
+# Master Cross-Agent Prompt (v2)
 
-This is the canonical prompt used to initialize any AI agent (Perplexity, Cursor, Claude, GPT-4, or any other) working in this repository. Paste this at the start of every new session.
+This is the canonical prompt used to initialize any AI agent (Perplexity, Cursor, Claude, GPT, or any other) working in this repository. Paste this at the start of every new session.
 
 ---
 
 ```
-You are working in the ZeroTrading repository.
+MASTER CONTEXT PROMPT - ZEROTRADING
+
 GitHub: https://github.com/meszaroszack/zerotrading
-Live app: https://zerotrading-core-production.up.railway.app
+Live Beta App: https://zerotrading-core-production.up.railway.app  (read-only reference; different GitHub; do NOT assume code parity with this repo until a port-audit DECISION-LOG entry exists)
+Deployment: Railway (app) + Supabase (persistence/analytics)
 
-ZeroTrading is an AI-first, open-knowledge prediction market platform built on Kalshi.
-Deployment: Railway. Persistence and analytics: Supabase.
-
-## STEP 1: READ THESE FILES FIRST (in order)
+You are working in the ZeroTrading repository. Before doing anything, fetch and read these files from https://github.com/meszaroszack/zerotrading :
 
 1. README.md
 2. ai/system/README-AI-SYSTEM.md
@@ -20,58 +19,52 @@ Deployment: Railway. Persistence and analytics: Supabase.
 4. ai/system/OPEN-OPSEC-POLICY.md
 5. ai/system/REPO-PRINCIPLES.md
 6. docs/ARCHITECTURE-ZEROTRADING-CORE.md
-7. ai/handoffs/CURRENT-STATE.md (if it exists)
-8. ai/summaries/DECISION-LOG.md
+7. ai/handoffs/CURRENT-STATE.md   (always points to latest state)
+8. ai/summaries/DECISION-LOG.md   (append-only history)
+9. Latest dated summary in ai/summaries/YYYY-MM-DD-HH-summary.md (highest filename wins)
 
-Do not proceed until you have read all of the above.
+Authoritative design PDFs (in docs/pdfs/):
+- zerotrading-core-execution-statemachine.pdf
+- zerotrading-core-accounting-fee-corrections.pdf
+- zerotrading-core-architecture.pdf
 
-## STEP 2: PROTECTED FOUNDATIONS
+Work priorities (in order):
+1. Mystic-style KXBTC15M 15-minute strategy module (flagship launch strategy)
+2. BTC hourly models - harden existing, fix accounting arithmetic
+3. Mine and adapt viable models from GitHub, sports, weather, and prior research
+4. 24/7 monitoring layer - market archive, anomaly detection, bubble maps, analytics/data-science graphics
 
-Do NOT bypass or casually alter:
-- The execution state machine (see docs/pdfs/zerotrading-core-execution-statemachine.pdf)
-- The accounting and fee correction logic (see docs/pdfs/zerotrading-core-accounting-fee-corrections.pdf)
-- The architecture boundaries (see docs/pdfs/zerotrading-core-architecture.pdf)
+Modes: paper -> safe-live -> live. Never skip safe-live. New strategies start in paper.
 
-Do NOT commit secrets, credentials, API keys, or live account identifiers.
+Non-negotiables:
+- All bugs, fixes, and AI passes produce: doc update + DECISION-LOG entry + CURRENT-STATE refresh
+- Do NOT alter execution state machine or accounting core without explicit instructions
+- Do NOT commit secrets, keys, or account identifiers
+- Exchange truth wins over local assumptions
+- Fail closed on ambiguity
+- Cite file paths with line refs when referencing repo content (e.g., docs/STRATEGY-KXBTC15M.md:42)
+- If you cannot push directly, output a copy-paste git/gh command block and STOP - do not pretend a push occurred
 
-## STEP 3: CURRENT WORK PRIORITIES
+Research & idea capture (every interaction):
+- Raw notes, transcripts, screenshots, external research:
+    research/notes/YYYY-MM-DD-<slug>.md
+- Adapted/distilled patterns from other repos or strategies:
+    research/adapted/<source>-<topic>.md   (cite source URL + commit hash if applicable)
+- Mystic-specific findings (the original system being ported):
+    research/mystic/<topic>.md
+- Cross-system synthesis (how Mystic + BTC hourly + weather + sports interact):
+    docs/SYSTEM-SYNTHESIS.md   (append-only sections per session)
+- Any new direction or pivot idea -> DECISION-LOG entry with Status: proposed
 
-1. Mystic-style KXBTC15M late-window strategy module integrated into ZeroTrading Core.
-2. BTC hourly models - stabilize accounting and arithmetic, reuse existing work.
-3. Continuously mine and adapt viable models from GitHub, sports, and weather markets.
-4. 24/7 market monitoring layer: always-on snapshots, anomaly detection, bubble-map analytics.
-5. All AI passes, bugs, fixes, and findings must be committed to GitHub - not left in chat.
+Session output contract (end of every session you MUST):
+1. Update or create relevant docs under docs/ or ai/
+2. Append an entry to ai/summaries/DECISION-LOG.md
+3. Overwrite ai/handoffs/CURRENT-STATE.md with the new live state
+4. Create a fresh-session summary at ai/summaries/YYYY-MM-DD-HH-summary.md
+   (shape per ai/handoffs/FRESH-SESSION-TEMPLATE.md and ai/schemas/session-summary.schema.json)
+5. If a strategy or architecture decision changed, update the corresponding
+   docs/STRATEGY-*.md or docs/ARCHITECTURE-ZEROTRADING-CORE.md in the same commit batch.
 
-## STEP 4: SESSION OUTPUT CONTRACT
-
-At the end of every session you MUST:
-- Update or create relevant docs under docs/ or ai/
-- Append an entry to ai/summaries/DECISION-LOG.md
-- Create a fresh-session summary (see ai/handoffs/FRESH-SESSION-TEMPLATE.md)
-  stored in ai/summaries/ with a timestamped filename: YYYY-MM-DD-HH-summary.md
-- Push all changes to GitHub. Chat-only output is not acceptable.
-- Satisfy ai/checklists/SESSION-OUTPUT-CONTRACT.md
-
-## STEP 5: STYLE AND SAFETY
-
-- Small, reviewable commits. Conventional commit messages.
-- Fail closed: if safety or accounting is ambiguous, do NOT expand live behavior.
-- Explainability is a feature: every trade and every skip must be legible to an operator.
-- Keep the repo understandable to both humans and AI agents at all times.
-
-## CURRENT TASK
-
-[REPLACE THIS WITH ONE CLEAR TASK DESCRIPTION]
-Example: "Wire a Mystic-style KXBTC15M strategy module into ZeroTrading Core in paper mode only,
-and document the design in docs/STRATEGY-KXBTC15M.md."
-
-## REQUIRED RESPONSE FORMAT
-
-1. Objective (what you are doing and why)
-2. Files you will read
-3. Files you will create or modify
-4. Step-by-step plan
-5. Safety and risk notes
-6. Changes for DECISION-LOG
-7. Fresh-session summary block
+Current task for this run:
+[DESCRIBE ONE CLEAR TASK HERE]
 ```
