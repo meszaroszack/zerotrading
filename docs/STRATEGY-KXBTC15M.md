@@ -1,17 +1,52 @@
-# STRATEGY: KXBTC15M Convergence v2
+# STRATEGY: KXBTC15M Over/Under v3
 
-> **Version:** 2.0 (Mystic-informed)
-> **Status:** PAPER MODE — not approved for live trading.
+> **Version:** 3.0 (Corrected market structure + Mystic-informed)
+> **Status:** PAPER MODE - not approved for live trading.
 > **Last updated:** 2026-05-20
 > **Authoritative references:** See `docs/pdfs/` for execution FSM and accounting.
 
 ---
 
+## CRITICAL: KXBTC15M Market Structure
+
+**READ THIS FIRST. Every AI agent working on this repo must internalize this section.**
+
+KXBTC15M is a **simple binary over/under contract.** It is NOT a range, wedge, band, or volatility product.
+
+### How it works
+
+1. At the start of each 15-minute window, the contract sets a **strike price** = BTC spot price at that moment.
+2. The contract asks ONE question: **"Will BTC be ABOVE or BELOW this strike price at the end of the 15 minutes?"**
+3. You buy **YES** (over) or **NO** (under). That's it.
+4. At settlement, if BTC is above the strike, YES pays $1.00, NO pays $0.00. If below, the reverse.
+
+### What it is NOT
+
+- NOT a range/band product (there is no "stays within +/-$250")
+- NOT a wedge or convergence product
+- NOT a volatility product
+- NOT a multi-strike ladder (there is ONE strike per window)
+- There are no "brackets" or "strike distances" - just one price, over or under
+
+### Why AI agents get this wrong
+
+AI models frequently hallucinate additional complexity onto binary contracts. Common errors:
+- Inventing range/band mechanics that don't exist
+- Assuming multiple strike levels per window
+- Applying options-style volatility surface thinking
+- Confusing KXBTC15M with hourly or daily range products on other platforms
+
+**If any document in this repo references ranges, wedges, bands, convergence zones, or strike distances for KXBTC15M, that document contains an error and must be corrected.**
+
+---
+
 ## 1. Strategy Overview
 
-**Thesis:** During low-to-moderate volatility regimes, BTC 15-minute price moves stay within predictable ranges ~85–92% of the time. When Kalshi contract pricing underestimates this probability, there is a positive-EV opportunity to buy YES on "price stays in range" contracts.
+**Thesis:** At the start of each 15-minute window, determine whether BTC is more likely to be above or below the strike at settlement. When the Kalshi orderbook misprices this probability, take the other side.
 
-**Edge source:** Gap between realized stay-in-range frequency and market-implied probability.
+**Edge source:** Gap between the market's implied probability (from YES/NO prices) and our model's estimated probability of BTC finishing above/below strike.
+
+**Core question every trade answers:** "Is BTC more likely to go up or down in the next 15 minutes, and is the market mispricing this?"
 
 **Inspired by:** Mystic Bot live-money results (April 2026). See `research/mystic/mystic-performance-summary.md`.
 
@@ -23,17 +58,20 @@
 
 1. **Volatility regime = CALM or MODERATE.** (Defined below.)
 2. **Spread <= $0.04** on the target contract.
-3. **Time filter:** Skip first 5 minutes and last 2 minutes of each 15m window.
+3. **Time filter:** Enter within first 5 minutes of the 15m window (while there's still time for edge to play out).
 4. **No scheduled macro events** within the current or next window (FOMC, CPI, NFP, etc.).
 5. **Daily loss limit NOT hit.**
 
 ### Entry signal
 
-- Identify the KXBTC15M contract whose strike range brackets the current BTC spot price.
-- Read the YES ask price from the Kalshi orderbook.
-- Compute model probability: `P_model = historical_stay_rate(current_vol_regime, strike_distance)`.
-- Compute implied probability: `P_implied = YES_ask_price / 100`.
-- **Enter if:** `P_model - P_implied >= EDGE_THRESHOLD` (default: 0.08, i.e., 8% edge).
+- Read the YES (over) ask price from the Kalshi orderbook.
+- Compute model probability of BTC finishing above strike:
+  - Inputs: recent momentum (last 5m, 15m, 1h), order flow imbalance, volatility regime.
+  - `P_model_over = f(momentum, orderflow, vol_regime)`
+- Compute implied probability: `P_implied_over = YES_ask_price / 100`.
+- **Buy YES (over) if:** `P_model_over - P_implied_over >= EDGE_THRESHOLD` (default: 0.08).
+- **Buy NO (under) if:** `(1 - P_model_over) - (1 - P_implied_over) >= EDGE_THRESHOLD`, i.e., model says under is underpriced.
+- **Skip if:** No edge on either side.
 
 ### Position sizing
 
@@ -46,7 +84,7 @@
 ## 3. Exit Rules
 
 - **Primary exit:** Hold to settlement. (Contract resolves at end of 15m window.)
-- **Early exit (optional):** If BTC moves >60% of strike distance before T-5min, market-sell YES to cut losses.
+- **Early exit (optional):** If momentum sharply reverses against position before T-5min, market-sell to cut losses.
 - **No averaging down.** If the position is losing, do not add.
 
 ---
@@ -60,6 +98,8 @@
 | HIGH | 1h realized vol 0.6-1.0% | Reduce position size by 50% |
 | EXTREME | 1h realized vol > 1.0% OR scheduled macro event | **NO TRADE** |
 
+Note: In CALM regimes, the over/under is close to 50/50 (slight drift bias). Edge comes from reading short-term momentum correctly. In HIGH regimes, directional moves are larger but less predictable.
+
 ---
 
 ## 5. Risk Guardrails
@@ -67,10 +107,10 @@
 | Guardrail | Threshold | Action |
 |---|---|---|
 | Daily loss limit | -$100 (paper) | Halt all trading for remainder of day |
-| Consecutive loss streak | 3 losses in a row | Pause 1 hour, then reassess vol regime |
+| Consecutive loss streak | 3 losses in a row | Pause 1 hour, then reassess |
 | Weekly loss limit | -$300 (paper) | Halt trading, trigger manual review |
 | Max daily trades | 40 | Hard stop, no more entries |
-| Spread blowout | Spread > $0.06 during position | Log warning, do not enter new trades |
+| Spread blowout | Spread > $0.06 | Log warning, do not enter new trades |
 
 ---
 
@@ -110,11 +150,11 @@ Persistent state in Supabase. On restart: fetch open positions from Kalshi API, 
 ## 8. Backtesting Requirements (Before Live)
 
 - [ ] Minimum 30 days of historical 15m BTC data.
-- [ ] Simulated Kalshi orderbook (or historical snapshots if available).
+- [ ] Simulated over/under outcomes for each 15m window.
 - [ ] Fee-adjusted PnL computed for every simulated trade.
 - [ ] Sharpe ratio > 1.5 required for live approval.
 - [ ] Maximum drawdown < 15% of starting capital.
-- [ ] Win rate > 80% across all vol regimes combined.
+- [ ] Win rate > 55% (note: on a binary over/under, 50% is random; edge shows above ~53%).
 
 ---
 
@@ -134,3 +174,4 @@ Persistent state in Supabase. On restart: fetch open positions from Kalshi API, 
 - `docs/pdfs/zerotrading-core-accounting-fee-corrections.pdf` - Accounting spec.
 - `docs/SYSTEM-SYNTHESIS.md` - Cross-system synthesis.
 - `ai/handoffs/CURRENT-STATE.md` - Live pointer.
+- `ai/guardrails/KXBTC15M-MARKET-STRUCTURE.md` - **REQUIRED READING for all agents.**
