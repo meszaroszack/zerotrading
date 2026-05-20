@@ -39,7 +39,8 @@ Each record follows this structure:
 | Estimated gross PnL | $600-800 |
 | Estimated net PnL (after fees) | Unknown - fee breakdown not disclosed |
 | Avg position size | ~$3-5 per contract |
-| Strategy type | Convergence / stay-in-range (inferred) |
+| Contract type | Binary over/under (NOT range/wedge) |
+| Strategy type | Directional momentum / intra-window trend-following (inferred) |
 | Automation | Fully automated (claimed) |
 
 #### Caveats
@@ -51,10 +52,11 @@ Each record follows this structure:
 5. **Scalability:** $3-5 positions. At larger sizes, fill rates and slippage may degrade the edge.
 6. **No drawdown data:** Maximum intraday loss, maximum streak loss, and worst-case scenarios are not reported.
 7. **Architecture unknown:** No public code, no disclosed infrastructure. Cannot verify automation claims.
+8. **Entry timing unknown:** We don't know when in the 15m window Mystic enters. Early vs late entry changes the entire risk profile.
 
 #### Assessment
 
-**Credible as a real-money proof-of-concept.** The data is consistent with a convergence strategy on calm-market BTC 15m contracts. It confirms that the edge exists in short bursts but does NOT prove durability.
+**Credible as a real-money proof-of-concept.** The data is consistent with a directional momentum strategy on binary over/under contracts. It confirms that short-term directional edges exist on KXBTC15M but does NOT prove durability.
 
 **ZeroTrading action:** Use as motivation and directional guidance. Do NOT use as a backtest or as evidence of strategy viability. Independent backtesting required before any live deployment.
 
