@@ -343,3 +343,44 @@ User identified that the live Railway deployment (`zerotrading-core-production.u
 - Update CURRENT-STATE.md.
 - Wire guardrail into MASTER-PROMPT and .cursor/rules.
 - User confirms language choice and begins implementation with correct model.
+
+---
+
+## 2026-05-21 ~02:00 ET - Full build inventory deep-dive complete
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** Prior build review and research documentation
+**Status:** decided
+**Scope:** research | strategy | architecture
+
+### Context
+
+User requested deep-dive of all prior Kalshi trading builds before writing the KXBTC15M strategy spec. Previously only trader-retro and kalshi-15m-bot had been reviewed. Needed to catalog the full portfolio to identify what's reusable vs. what's broken.
+
+### Decision
+
+Deep-dived 7 builds total (5 new this session). Created research/adapted/ files for each:
+1. `kalshi-ai-trader-v2-15m.md` - AI-driven regime detection, penny hunting, exit cascade
+2. `alpha-bot-15m.md` - 4 strategies, Supabase persistence, reference price alignment
+3. `kalshi-trader-15m.md` - 111-commit OG build, external signals, bracket orders, hour bias
+4. `kalshi-btcd-trader-hourly.md` - Terminal probability model (Black-Scholes), scored edge mode, circuit breakers
+
+Also triaged and dismissed: kalshi-15m-scalper (stub), Dopealkshi (empty), kalshi-btcd-ai-trader (1-commit snapshot), compd-trader (UI only).
+
+Updated CURRENT-STATE.md with full build inventory table, cross-build synthesis, strategy direction, and next steps.
+
+### Rationale
+
+The key finding: kalshi-btcd-trader's probability model (touchProb.ts) is the architectural blueprint for KXBTC15M. It computes fair value using Black-Scholes with per-minute sigma from Binance 1m candles, then trades when model probability diverges from market-implied probability. This is the only build that approaches trading as a probability-edge problem rather than a pattern-recognition problem.
+
+Alpha-bot contributes the best infrastructure (Supabase, reference price alignment). kalshi-trader contributes external signals and hour-based bias. kalshi-ai-trader-v2 contributes the exit cascade structure.
+
+All builds share two fatal flaws: no persistence and no exchange reconciliation.
+
+### Consequences
+
+- Research phase for KXBTC15M is COMPLETE. 7 adapted research files committed.
+- Strategy direction is decided: probability-edge trading, Python, Supabase, paper mode first.
+- Next step: Write `docs/STRATEGY-KXBTC15M.md` v2 as the full spec, then build code.
+- CURRENT-STATE.md updated with full inventory and roadmap.
+- Any new agent session will boot with complete context of all prior work.
