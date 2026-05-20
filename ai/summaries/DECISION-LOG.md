@@ -150,3 +150,41 @@ Flagship launch strategy is a Mystic-inspired KXBTC15M late-window sniper runnin
 ### Related files
 - `ai/prompts/BUILD-LAUNCH-BOT.md`
 - `docs/STRATEGY-KXBTC15M.md` (to be created)
+
+
+## 2026-05-19 23:00 ET - AI-first scaffold completion + PDFs uploaded
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** ai/summaries/2026-05-19-23-summary.md (pending)
+**Status:** decided
+**Scope:** docs | architecture | governance
+
+### Context
+Repo needed the remaining AI-first scaffolds (research logs, cursor rules, architecture index, strategy specs) and the three authoritative PDFs in `docs/pdfs/`.
+
+### Decision
+Committed 7 scaffold files directly to `main`:
+- `research/logs/README.md`
+- `.cursor/rules/core-product.mdc`
+- `.cursor/rules/trading-safety.mdc`
+- `docs/ARCHITECTURE-ZEROTRADING-CORE.md`
+- `docs/STRATEGY-KXBTC15M.md`
+- `docs/STRATEGY-BTC-HOURLY.md`
+- `docs/STRATEGY-Weather.md`
+
+User uploaded the three authoritative PDFs to `docs/pdfs/`:
+- `zerotrading-core-architecture.pdf`
+- `zerotrading-core-execution-statemachine.pdf`
+- `zerotrading-core-accounting-fee-corrections.pdf`
+
+References in `docs/ARCHITECTURE-ZEROTRADING-CORE.md` now resolve.
+
+### Consequences
+- Master prompt (`ai/prompts/MASTER-PROMPT.md`) Step 1 read-list is now fully satisfiable.
+- Protected foundations referenced in Step 2 are physically present in the repo.
+- Next sessions can cite PDFs as authoritative; deviations require new DECISION-LOG entry.
+
+### Next
+- Create `ai/handoffs/CURRENT-STATE.md` so MASTER-PROMPT Step 1 item 7 resolves.
+- Begin work on KXBTC15M Mystic-style launch wedge implementation per `docs/STRATEGY-KXBTC15M.md`.
+- Stand up 24/7 monitoring writer into `research/logs/` JSONL.
