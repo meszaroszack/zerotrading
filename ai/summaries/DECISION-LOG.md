@@ -218,3 +218,33 @@ Needed v2 of MASTER-PROMPT to enforce research-capture-per-interaction policy, h
 - User will provide prior 15-min market builds for analysis.
 - Each build gets a `research/adapted/<source>-15m.md`.
 - Synthesis updates `docs/STRATEGY-KXBTC15M.md` v2.
+
+
+## 2026-05-20 00:00 ET - Prior 15m builds deep-dive: trader-retro + kalshi-15m-bot
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** ai/summaries/2026-05-20-00-summary.md (pending)
+**Status:** proposed
+**Scope:** research | strategy
+
+### Context
+User has two prior KXBTC15M bot builds. Need to understand what works, what broke, and what to port into ZeroTrading.
+
+### Decision
+Deep-dived both repos via GitHub. Created detailed analysis files:
+- `research/adapted/trader-retro-15m.md` - TypeScript swing bot. Monolithic, InMemory, signals on BTC spot not orderbook. Reusable: Kalshi API client, swing detection pattern, pre-calc stop/target.
+- `research/adapted/kalshi-15m-bot-15m.md` - Python multi-strategy bot. Properly modular (client/feed/orders/risk/strategies). Reusable: entire architecture, OrderManager, RiskGuard, WS feed, strategy plugin system, settlement-hold.
+
+Verdict: kalshi-15m-bot is the primary donor codebase. Both share fatal flaw: no persistent state, no exchange reconciliation.
+
+### Consequences
+- ZeroTrading KXBTC15M should be built on kalshi-15m-bot's modular architecture (Python), with Supabase persistence and boot reconciliation added.
+- trader-retro contributes the Kalshi API client typing pattern and swing-detection idea.
+- Three critical fixes identified for any port: (1) persistent state, (2) fill verification + fee accounting, (3) exchange reconciliation loop.
+- Language decision needed: Python (kalshi-15m-bot) vs TypeScript (trader-retro). Recommend Python given the more mature codebase.
+
+### Next
+- User to confirm language choice (Python recommended).
+- Decide starting strategy: simple threshold/last90 first, momentum later.
+- Begin porting kalshi-15m-bot src/ structure into ZeroTrading repo with persistence layer.
+- Review remaining user builds if any.
