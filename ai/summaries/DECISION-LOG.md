@@ -248,3 +248,37 @@ Verdict: kalshi-15m-bot is the primary donor codebase. Both share fatal flaw: no
 - Decide starting strategy: simple threshold/last90 first, momentum later.
 - Begin porting kalshi-15m-bot src/ structure into ZeroTrading repo with persistence layer.
 - Review remaining user builds if any.
+
+- ---
+
+## 2026-05-20 00:30 ET - Mystic Bot analysis and strategy v2 upgrade
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** Continuation of KXBTC15M strategy development
+**Status:** decided
+**Scope:** strategy | research | docs
+
+### Context
+
+User surfaced Mystic Bot (KXBTC15M) live-money performance data from April 12-15, 2026: 134W/3L (~97.8% win rate) on real Kalshi fills. This is the most transparent public performance data found for any KXBTC15M automated strategy. Need to assess credibility, extract learnings, and upgrade ZeroTrading's strategy documentation accordingly.
+
+### Decision
+
+1. **Created `research/mystic/mystic-performance-summary.md`** - Full analysis of Mystic claims, inferred edge logic (convergence wedge), credibility assessment, and what ZeroTrading should adopt vs reject.
+2. **Upgraded `docs/STRATEGY-KXBTC15M.md` to v2** - Replaced skeleton with full Mystic-informed convergence strategy spec: entry/exit rules, volatility regime classification, risk guardrails, accounting requirements, execution FSM reference, backtesting requirements, and deployment path (paper -> safe-live -> live).
+3. **Created `docs/PERFORMANCE-RECORDS.md`** - Auditable performance log with PERF-001 (Mystic data), verification policy, and minimum sample sizes for strategy approval.
+
+### Consequences
+
+- ZeroTrading now has a concrete, parameterized strategy spec (not just a skeleton) to implement.
+- Mystic data is properly documented with caveats (4-day sample, no fee-adjusted PnL, selection bias possible).
+- Clear verification policy prevents premature go-live based on unverified third-party claims.
+- Strategy v2 explicitly requires 200+ paper trades before safe-live, 500+ before full live.
+- Convergence-first approach adopted as primary thesis (buy YES on "BTC stays in range").
+
+### Next
+
+- User to confirm language choice (Python recommended) and starting strategy parameters.
+- Begin implementing paper-mode bot based on STRATEGY-KXBTC15M.md v2.
+- Backtest convergence logic against historical 15m BTC data (minimum 30 days).
+- Update CURRENT-STATE.md to reflect new artifacts.
