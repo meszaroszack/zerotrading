@@ -1,0 +1,12 @@
+---
+description: Trading safety guardrails
+alwaysApply: true
+---
+# Trading Safety
+
+- Daily loss cap server-side; breach halts new entries and alerts.
+- Per-market and per-account exposure caps.
+- No orders without: heartbeat, websocket, auth, fresh price feed.
+- Kill switch stops new entries within 1s and reconciles open positions.
+- Live changes gated behind safe-live verification run.
+- Never log secrets. Never commit .env. Never expose account IDs publicly.
