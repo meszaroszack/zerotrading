@@ -282,3 +282,37 @@ User surfaced Mystic Bot (KXBTC15M) live-money performance data from April 12-15
 - Begin implementing paper-mode bot based on STRATEGY-KXBTC15M.md v2.
 - Backtest convergence logic against historical 15m BTC data (minimum 30 days).
 - Update CURRENT-STATE.md to reflect new artifacts.
+
+
+---
+
+## 2026-05-20 01:00 ET - CRITICAL CORRECTION: KXBTC15M is over/under, not range/wedge
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** Market structure correction
+**Status:** decided - SUPERSEDES prior entry's convergence/range references
+**Scope:** strategy | research | docs | guardrails
+
+### Context
+
+User identified a critical error: all AI-generated KXBTC15M analysis incorrectly described the contract as a range/wedge/convergence product. KXBTC15M is a simple binary over/under contract. One strike, two outcomes: above or below. No ranges, bands, wedges, or convergence zones exist. This is a known recurring AI failure mode.
+
+### Decision
+
+1. Upgraded STRATEGY-KXBTC15M.md to v3 with correct over/under model.
+2. Rewrote mystic-performance-summary.md v2 with directional bias detection logic.
+3. Fixed PERFORMANCE-RECORDS.md to reference directional momentum, not convergence.
+4. Created ai/guardrails/KXBTC15M-MARKET-STRUCTURE.md as required reading for all AI agents.
+
+### Consequences
+
+- ALL prior convergence/wedge/range references for KXBTC15M are now marked as errors.
+- Guardrail doc must be referenced in MASTER-PROMPT, .cursor/rules, and all handoffs.
+- Strategy reframed as directional prediction: which side of strike will BTC finish?
+- This demonstrates a core risk of AI-assisted trading: AI confidently builds on wrong market structure assumptions.
+
+### Next
+
+- Update CURRENT-STATE.md.
+- Wire guardrail into MASTER-PROMPT and .cursor/rules.
+- User confirms language choice and begins implementation with correct model.
