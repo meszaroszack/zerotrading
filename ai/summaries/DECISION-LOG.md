@@ -188,3 +188,33 @@ References in `docs/ARCHITECTURE-ZEROTRADING-CORE.md` now resolve.
 - Create `ai/handoffs/CURRENT-STATE.md` so MASTER-PROMPT Step 1 item 7 resolves.
 - Begin work on KXBTC15M Mystic-style launch wedge implementation per `docs/STRATEGY-KXBTC15M.md`.
 - Stand up 24/7 monitoring writer into `research/logs/` JSONL.
+
+
+## 2026-05-19 23:30 ET - MASTER-PROMPT v2 + research scaffolds + CURRENT-STATE
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** ai/summaries/2026-05-19-23-summary.md (pending)
+**Status:** decided
+**Scope:** governance | research | docs
+
+### Context
+Needed v2 of MASTER-PROMPT to enforce research-capture-per-interaction policy, honest push behavior, mode discipline, and CURRENT-STATE pointer. Also needed physical folder scaffolds for research notes, adapted patterns, and Mystic-specific findings.
+
+### Decision
+- Updated `ai/prompts/MASTER-PROMPT.md` to v2 with: research & idea capture block, push-honesty rule, mode discipline, CURRENT-STATE requirement, live-beta-app read-only clarification, file-path citation rule.
+- Created `ai/handoffs/CURRENT-STATE.md` as the live state pointer (overwritten each session).
+- Created `research/notes/README.md` with note template and naming convention.
+- Created `research/adapted/README.md` with adapted-pattern template.
+- Created `research/mystic/README.md` with Mystic-finding template.
+- Created `docs/SYSTEM-SYNTHESIS.md` as the append-only cross-system synthesis doc with initial seed entry.
+
+### Consequences
+- Every future agent session now has a required research-capture workflow (drop notes -> adapted patterns -> mystic findings -> synthesis -> decision log).
+- CURRENT-STATE.md is the boot file for any new agent; always reflects latest state.
+- SYSTEM-SYNTHESIS.md captures how strategies and systems interact, growing per session.
+- Prior session gaps (no research folder structure, no CURRENT-STATE, no synthesis doc) are closed.
+
+### Next
+- User will provide prior 15-min market builds for analysis.
+- Each build gets a `research/adapted/<source>-15m.md`.
+- Synthesis updates `docs/STRATEGY-KXBTC15M.md` v2.
