@@ -2,32 +2,40 @@
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
 
-**Last updated:** 2026-05-19 23:00 ET
+**Last updated:** 2026-05-20 00:00 ET
 **Updated by:** Comet (browser agent) on behalf of meszaroszack
 
 ## Where we are
-- AI-first repo scaffold complete: `ai/`, `docs/`, `ops/runbooks/`, `research/logs/`, `.cursor/rules/`.
-- Authoritative PDFs present in `docs/pdfs/` (architecture, execution FSM, accounting/fee-corrections).
-- MASTER-PROMPT v2 active at `ai/prompts/MASTER-PROMPT.md` (research capture, push-honesty, mode discipline).
-- Strategy scaffolds in place: `docs/STRATEGY-KXBTC15M.md`, `STRATEGY-BTC-HOURLY.md`, `STRATEGY-Weather.md`.
-- No code yet. No live deploy on this repo. Live beta app (`zerotrading-core-production.up.railway.app`) is a different GitHub - treat as read-only reference.
+- AI-first repo scaffold complete: `ai/`, `docs/`, `ops/runbooks/`, `research/`, `.cursor/rules/`.
+- Authoritative PDFs in `docs/pdfs/` (architecture, execution FSM, accounting/fee-corrections).
+- MASTER-PROMPT v2 active at `ai/prompts/MASTER-PROMPT.md`.
+- Research scaffolds live: `research/notes/`, `research/adapted/`, `research/mystic/`.
+- `docs/SYSTEM-SYNTHESIS.md` seeded with initial cross-system entry.
+- **Deep-dived two prior 15m builds:**
+  - `research/adapted/trader-retro-15m.md` - TS swing bot, monolithic, InMemory, signals on BTC spot.
+  - `research/adapted/kalshi-15m-bot-15m.md` - Python multi-strategy, modular, WS feed, RiskGuard, OrderManager.
+- **Verdict:** kalshi-15m-bot is the primary donor codebase for KXBTC15M. Both share fatal flaw: no persistent state, no exchange reconciliation.
+- No code in zerotrading repo yet. No live deploy.
 
-## What is in flight
-- Reviewing user's prior 15-minute market builds (URLs/paths TBD by user).
-- Each prior build will get a `research/adapted/<source>-15m.md` summary + DECISION-LOG entry (Status: proposed).
-- Output: a v2 of `docs/STRATEGY-KXBTC15M.md` synthesizing reusable patterns.
+## Key findings from prior builds
+1. Both bots use InMemoryStorage - restart = orphaned Kalshi positions.
+2. P&L computed locally from bid prices, not actual fill prices. Fees not accounted. This causes the accounting discrepancy vs Kalshi account.
+3. trader-retro signals on BTC spot (wrong instrument). kalshi-15m-bot signals on Kalshi orderbook (correct).
+4. kalshi-15m-bot has proper modular architecture (client/feed/orders/risk/strategies) worth porting.
+5. Three critical fixes for any port: persistent state, fill verification + fee accounting, exchange reconciliation loop.
+
+## Decisions pending (user input needed)
+1. **Language:** Python (recommended, kalshi-15m-bot is Python) vs TypeScript.
+2. **Starting strategy:** Simple threshold/last90 first, momentum later? Or start with momentum?
+3. **More builds to review?** User mentioned there are more.
+4. **Port approach:** Copy kalshi-15m-bot src/ structure and add Supabase, or clean rewrite guided by the analysis?
 
 ## Next concrete step
-1. User points to prior 15-min builds (GitHub URLs, local paths, or pasted code).
-2. Agent reads each, writes one `research/adapted/<source>-15m.md`.
-3. Agent appends DECISION-LOG (Status: proposed) per build.
-4. Agent updates `docs/STRATEGY-KXBTC15M.md` v2 with synthesis.
-5. Agent overwrites this file and writes `ai/summaries/2026-05-19-23-summary.md`.
-
-## Open questions / blockers
-- Which prior 15-min builds to start with (user input pending).
-- Code language for KXBTC15M module (Python vs TS - pending user call).
-- Whether to mirror live-beta-app code into this repo or keep clean rebuild (pending port-audit decision).
+1. User confirms language + starting strategy + whether more builds to review.
+2. Port kalshi-15m-bot modular structure into `src/` in this repo.
+3. Add Supabase persistence layer.
+4. Add boot reconciliation (fetch open Kalshi positions, rebuild local state).
+5. Start in paper mode.
 
 ## Do not regress
 - Execution FSM (see `docs/pdfs/zerotrading-core-execution-statemachine.pdf`).
