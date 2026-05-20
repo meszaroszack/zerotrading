@@ -3,6 +3,7 @@
 > **REQUIRED READING for every AI agent working on this repo.**
 > **This file must be referenced in every prompt, handoff, and fresh-session template.**
 > **If you are an AI agent and you have not read this file, STOP and read it now.**
+> > **This document is KXBTC15M-specific. For the full Kalshi BTC market taxonomy (KXBTCD hourly vs KXBTC15M), see `ai/guardrails/KALSHI-MARKET-REFERENCE.md`.**
 
 ---
 
