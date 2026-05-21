@@ -384,3 +384,36 @@ All builds share two fatal flaws: no persistence and no exchange reconciliation.
 - Next step: Write `docs/STRATEGY-KXBTC15M.md` v2 as the full spec, then build code.
 - CURRENT-STATE.md updated with full inventory and roadmap.
 - Any new agent session will boot with complete context of all prior work.
+
+---
+
+## 2026-05-20 ~22:30 ET - Persistence & reconciliation guardrail system created
+
+**Author:** Comet (browser agent) on behalf of meszaroszack
+**Session:** Guardrail audit and gap closure
+**Status:** decided
+**Scope:** architecture | guardrails | docs
+
+### Context
+
+User asked: do we have documentation that ensures the two fatal flaws (no persistence, no exchange reconciliation) won't repeat? Audit revealed: STRATEGY-KXBTC15M.md sections 6-7 describe the right architecture, but no hard guardrail existed to block an agent from writing in-memory-only code. MASTER-PROMPT didn't list persistence/reconciliation as non-negotiable. CURRENT-STATE "Do Not Regress" omitted it.
+
+### Decision
+
+Created a 3-layer defense system:
+1. `ai/guardrails/PERSISTENCE-RECONCILIATION.md` - Dedicated guardrail with 4 non-negotiable rules, 6-question self-test, error history table showing all 7 builds that failed
+2. `ai/prompts/MASTER-PROMPT.md` v3 - Added as required read (#10) + 3 explicit non-negotiable rules in the non-negotiables block
+3. `ai/handoffs/CURRENT-STATE.md` - Added 4 items to "Do Not Regress" list
+4. `ai/checklists/PRE-CODE-REVIEW.md` - New pre-code review checklist with persistence/reconciliation/P&L/market/safety gates (all marked BLOCKING)
+
+### Rationale
+
+The prior builds didn't fail because developers didn't know about persistence. They failed because nothing enforced it. The strategy doc described the right architecture, but agents could ignore it. Now there are three independent enforcement points: the required read list, the non-negotiables block, and the pre-code checklist. An agent would have to violate all three to repeat the mistake.
+
+### Consequences
+
+- Any new agent session will read PERSISTENCE-RECONCILIATION.md before writing code
+- MASTER-PROMPT explicitly forbids in-memory state and requires boot reconciliation
+- Pre-code checklist gates code that touches trading/execution/state
+- CURRENT-STATE "Do Not Regress" lists persistence and reconciliation as top-level requirements
+- The two fatal flaws from all 7 prior builds are now documented, explained, and enforced at multiple levels
