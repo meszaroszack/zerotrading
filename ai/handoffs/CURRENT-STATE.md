@@ -1,8 +1,7 @@
 # CURRENT STATE
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
-
-**Last updated:** 2026-05-21 ~02:00 ET
+**Last updated:** 2026-05-21 ~19:00 ET
 **Updated by:** Comet (browser agent) on behalf of meszaroszack
 
 ## CRITICAL: Know your market before doing ANYTHING
@@ -104,4 +103,26 @@ The builds that got closest to working:
 - **ALL state MUST be persisted in Supabase, NEVER in-memory or file-based** (see `ai/guardrails/PERSISTENCE-RECONCILIATION.md`)
 - **Every boot MUST reconcile positions and balance with Kalshi exchange** before entering the trading loop
 - **P&L MUST come from actual Kalshi fill prices and settlements**, not from bid/ask estimates
-- No code that touches trading/execution/state is ready for review until the 6-question self-test in PERSISTENCE-RECONCILIATION.md passes
+- No code that touches trading/execution/state is ready for review until the 10-question self-test in PERSISTENCE-RECONCILIATION.md passes
+
+
+### Kalshi API & WebSocket Engineering (Added 2026-05-21)
+
+**Research complete.** Three new deep-dives committed:
+- `research/adapted/kalshi-public-docs-api-websocket.md` - Authoritative Kalshi API/WS reference (channels, message schemas, rate limits, market lifecycle)
+- `research/adapted/morningside-wagewise-orderbook.md` - L3 orderbook architecture patterns (O(1) lookups, feed/engine separation)
+- `research/adapted/probablyprofit-order-management.md` - OrderManager patterns (event callbacks, integrated reconciliation, Kelly sizing)
+
+**Guardrails hardened:**
+- `ai/guardrails/PERSISTENCE-RECONCILIATION.md` updated with Rule 5 (WebSocket real-time reconciliation) and Rule 6 (rate limit budget management)
+- Self-test expanded from 6 to 10 questions
+- Related documents section cross-references all three research files
+
+**Key new requirements for any agent writing trading code:**
+1. Subscribe to BOTH `user_orders` AND `fill` WebSocket channels
+2. Atomic Supabase write on every fill event BEFORE acting on it
+3. Use `client_order_id` as correlation key (idempotency)
+4. Use `taker_fill_cost_dollars` / `maker_fill_cost_dollars` for P&L (includes fees)
+5. Re-bootstrap state on every WebSocket reconnect
+6. Periodic 60s REST reconciliation as safety net
+7. Exponential backoff with jitter on 429s and WS disconnects
