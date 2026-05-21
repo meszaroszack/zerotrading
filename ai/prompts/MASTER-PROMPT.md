@@ -22,6 +22,7 @@ You are working in the ZeroTrading repository. Before doing anything, fetch and 
 7. ai/handoffs/CURRENT-STATE.md   (always points to latest state)
 8. ai/summaries/DECISION-LOG.md   (append-only history)
 9. Latest dated summary in ai/summaries/YYYY-MM-DD-HH-summary.md (highest filename wins)
+10. ai/guardrails/PERSISTENCE-RECONCILIATION.md  (REQUIRED — blocks repeat of fatal flaw from all prior builds)
 
 Authoritative design PDFs (in docs/pdfs/):
 - zerotrading-core-execution-statemachine.pdf
@@ -42,6 +43,9 @@ Non-negotiables:
 - Do NOT commit secrets, keys, or account identifiers
 - Exchange truth wins over local assumptions
 - Fail closed on ambiguity
+    - ALL state MUST be persisted in Supabase (NEVER in-memory or file-based). See ai/guardrails/PERSISTENCE-RECONCILIATION.md
+    - Every boot MUST reconcile positions and balance with Kalshi exchange before trading
+    - P&L MUST come from actual Kalshi fill prices and settlements, not from estimates
 - Cite file paths with line refs when referencing repo content (e.g., docs/STRATEGY-KXBTC15M.md:42)
 - If you cannot push directly, output a copy-paste git/gh command block and STOP - do not pretend a push occurred
 
