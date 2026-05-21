@@ -85,6 +85,79 @@ If ANY answer is wrong, the code is not ready for review.
 
 ## Related Documents
 
+
+---
+
+## Rule 5: WebSocket Real-Time Reconciliation (Added 2026-05-21)
+
+> Source: `research/adapted/kalshi-public-docs-api-websocket.md`
+> This rule closes the gap identified in prior research: Rules 1-4 cover boot and REST reconciliation, but real-time WebSocket reconciliation was missing.
+
+### Requirements
+
+1. **Subscribe to BOTH `user_orders` AND `fill` WebSocket channels on connect**
+   - `user_orders`: order-level state transitions (resting, filled, canceled)
+   - `fill`: individual trade-level fills with `trade_id`, `order_id`, prices, timestamps
+
+2. **Atomic Supabase write on every fill event**
+   - Every fill received via WebSocket MUST be written to Supabase BEFORE the bot acts on it
+   - Use `client_order_id` as the correlation key between local orders and exchange state
+   - Track partial fills: `fill_count_fp` vs `initial_count_fp` - orders can be partially filled
+
+3. **P&L from fill cost fields, not price fields**
+   - Use `taker_fill_cost_dollars` and `maker_fill_cost_dollars` from `user_orders` channel
+   - These fields INCLUDE Kalshi fees - they are the true cost of the trade
+   - DO NOT compute P&L from `yes_price_dollars * count` (that excludes fees)
+
+4. **Keep-alive handling**
+   - Kalshi sends Ping frames every 10 seconds with body `heartbeat`
+   - Client MUST respond with Pong within 10 seconds or connection drops
+   - Monitor for missed pings as early disconnect detection
+
+5. **Reconnection with re-bootstrap**
+   - On any WebSocket disconnect: exponential backoff (1s, 2s, 4s, ... 60s max) with jitter
+   - On reconnect: MUST re-run boot reconciliation (Rule 2) before resuming
+   - Fills that occurred during the disconnect window must be fetched via REST and reconciled
+
+6. **Periodic safety-net reconciliation**
+   - Every 60 seconds: REST snapshot of orders + positions
+   - Compare against WebSocket-derived Supabase state
+   - Alert on any drift; log before auto-correcting
+   - This catches missed WebSocket messages from network blips
+
+### Self-Test Addition
+
+| # | Question | Required Answer |
+|---|----------|----------------|
+| 7 | Does the bot subscribe to both `user_orders` AND `fill` WebSocket channels? | YES |
+| 8 | Is every WebSocket fill event persisted to Supabase before the bot acts on it? | YES |
+| 9 | Does the bot re-bootstrap state after a WebSocket reconnect? | YES |
+| 10 | Is there a periodic REST reconciliation running as a safety net? | YES |
+
+## Rule 6: Rate Limit Budget Management (Added 2026-05-21)
+
+> Source: `research/adapted/kalshi-public-docs-api-websocket.md`
+
+### Kalshi Rate Limit Structure
+
+- **Two independent budgets:** Read (GET) and Write (orders/cancels)
+- **Most requests cost 10 tokens.** Cancellations and single-order reads are cheaper.
+- **Batch endpoints do NOT save tokens.** 25 orders in batch = 250 tokens.
+- **Burst capacity:** Write bucket holds 2 seconds of per-second budget.
+
+### Requirements
+
+1. **Prefer WebSocket over REST for real-time data** - Minimize read token consumption
+2. **Implement exponential backoff with jitter on 429 responses**
+3. **Never retry immediately after a 429** - Wait for bucket refill
+4. **Track token consumption** - Log when approaching budget limits
+5. **Reserve REST budget for reconciliation** - Don't waste it on data that WebSocket provides
+
+### Related Documents
+
+- `research/adapted/kalshi-public-docs-api-websocket.md` (full API/WS engineering reference)
+- `research/adapted/probablyprofit-order-management.md` (OrderManager reconciliation patterns)
+- `research/adapted/morningside-wagewise-orderbook.md` (local orderbook architecture)
 - `docs/STRATEGY-KXBTC15M.md` §§6-7 (Accounting Requirements, Execution FSM)
 - `docs/pdfs/zerotrading-core-execution-statemachine.pdf` (FSM design)
 - `docs/pdfs/zerotrading-core-accounting-fee-corrections.pdf` (Fee/P&L truth model)
