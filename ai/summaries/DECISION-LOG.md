@@ -417,3 +417,33 @@ The prior builds didn't fail because developers didn't know about persistence. T
 - Pre-code checklist gates code that touches trading/execution/state
 - CURRENT-STATE "Do Not Regress" lists persistence and reconciliation as top-level requirements
 - The two fatal flaws from all 7 prior builds are now documented, explained, and enforced at multiple levels
+
+
+## 2026-05-21 19:00 ET - Kalshi API & WebSocket engineering research complete
+
+**Author:** Perplexity Comet (research session)
+**Session:** Kalshi API/WebSocket deep-dive and guardrail hardening
+**Status:** decided
+**Scope:** research | architecture | docs
+
+### Context
+User identified a massive oversight: no prior build had documented how to sustainably use Kalshi APIs and WebSocket, especially for order fulfillment and reconciliation. Existing guardrails (PERSISTENCE-RECONCILIATION.md Rules 1-4) covered boot reconciliation and Supabase persistence but had zero WebSocket or rate limit content.
+
+### Decision
+Conduct external research on Kalshi official docs, open-source trading bots, and community patterns. Produce research artifacts and harden guardrails with WebSocket reconciliation (Rule 5) and rate limit management (Rule 6).
+
+### Rationale
+Every prior build suffered from the same two fatal flaws (no persistence, no reconciliation). The guardrails addressed boot-time reconciliation but not real-time WebSocket reconciliation or rate limit engineering. This research closes those gaps.
+
+### Consequences
+- PERSISTENCE-RECONCILIATION.md now has 6 rules (was 4) and 10 self-test questions (was 6)
+- Three new research/adapted/ deep-dives committed for future agent reference
+- Any agent implementing trading code now has authoritative Kalshi API field mappings
+- Rate limit awareness prevents 429-induced order failures
+
+### Related files
+- research/adapted/kalshi-public-docs-api-websocket.md (NEW)
+- research/adapted/morningside-wagewise-orderbook.md (NEW)
+- research/adapted/probablyprofit-order-management.md (NEW)
+- ai/guardrails/PERSISTENCE-RECONCILIATION.md (UPDATED: Rules 5-6)
+- ai/handoffs/CURRENT-STATE.md (UPDATED)
