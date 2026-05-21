@@ -101,3 +101,7 @@ The builds that got closest to working:
 - Maker orders have NO fees; settlement has NO fees
 - Technical indicators (RSI/MACD/BB) are dubious for 15-min binary outcomes
 - The real edge is model probability vs market-implied probability, not pattern recognition
+- **ALL state MUST be persisted in Supabase, NEVER in-memory or file-based** (see `ai/guardrails/PERSISTENCE-RECONCILIATION.md`)
+- **Every boot MUST reconcile positions and balance with Kalshi exchange** before entering the trading loop
+- **P&L MUST come from actual Kalshi fill prices and settlements**, not from bid/ask estimates
+- No code that touches trading/execution/state is ready for review until the 6-question self-test in PERSISTENCE-RECONCILIATION.md passes
