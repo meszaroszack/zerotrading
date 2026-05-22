@@ -554,68 +554,35 @@ Order: INSUFFICIENT_DATA → EXTREME_VOL → ELEVATED_VOL → MACRO_BLOCKED → 
 
 ---
 
-## 2026-05-21 21:32 ET — Paper mode audit: 5 crash-level bugs fixed + auto-discovery added (beta repo)
+## 2026-05-21 — Session: ZeroTrading Core Stabilization (11 Bug Fixes + Governance Integration)
 
-**Author:** Perplexity Computer (Comet) on behalf of meszaroszack  
-**Session:** `ai/summaries/2026-05-21-2132-paper-bugfix.md` (beta repo)  
-**Beta commit:** `914351a` on `meszaroszack/zerotradingx15minbtc`  
-**Status:** decided — implemented, syntax-verified, pushed  
-**Scope:** execution | accounting | architecture | ops
+**Session metadata**
+- Date/time: 2026-05-21, ~18:00–21:33 ET
+- Agent: Perplexity Computer (Comet)
+- Operator: Zack Meszaros (meszaroszack)
+- Repo: meszaroszack/zerotrading-core (TypeScript live trading engine)
+- Branch: main
+- Mode: live (real money, Railway production)
 
-### Context
+**Context**
+Major stabilization session for ZeroTrading Core (KXBTCD live system). Eleven bugs fixed end-to-end, taking the bot from a crash-looping state to reliably cycling through IDLE→ENTERING→OPEN→SETTLED with correct fill prices and P&L reporting. Session concluded with bringing the parent repo governance structure into zerotrading-core.
 
-User asked "does the whole accounting and workflow actually work in paper mode?" — triggering a full audit of the Phase 1 skeleton before any paper run was attempted. Audit found 5 crash-level bugs that would have prevented the bot from booting, trading, or recording results correctly. All bugs were in code shipped in Phase 1 commit `d205ec4`.
+**Decisions (abbreviated — full entries in zerotrading-core ai/summaries/DECISION-LOG.md)**
 
-User also confirmed that auto-discovery of the active KXBTC15M market ticker was missing from Phase 1 — the bot required `KALSHI_MARKET_TICKER` to be set manually, which is unnecessary because there is exactly one KXBTC15M window open at any time.
+1. **ENTERING+null activeOrder → MANUAL_REVIEW** (not crash) — `78a2055`
+2. **proximityPenaltyBps added to MarketCandidate type** — `e9ab458`
+3. **PERSIST_CONTEXT after every order state transition** — `485fef1`
+4. **Fill race + [object Object] in event log fixed** — `826a949`
+5. **Time-exit removed permanently** — operator decision: do not sell because market is ending — `be99ad2`
+6. **Root cause fix: count_fp normalization** — Kalshi returns "1.00" not "10000"; `normalizeCountFp()` at adapter boundary; root cause of ALL prior entry_abandoned_no_fill failures — `62f2126`
+7. **404 on getOrder = order executed** — expected Kalshi behavior; treat as closed — `82b0bd9`
+8. **Open-ended RECONCILING + 2-min watchdog** — replaced blocking retry loops; tolerates Kalshi latency — `0dd95bd`
+9. **positionStore.create() via ACCT_OPEN_POSITION** — fixes blank trade history and position fields — `e3d224b`
+10. **Settlement detection rewrite** — Kalshi dropped `settled` field from positions endpoint (Dec 2025 breaking change); `getMarketStatus()` calls `GET /markets/{ticker}` → `status==="finalized"` — `d87cfe0`
+11. **Fill price fields + re-entry guard + exit P&L** — `no/yes_price_dollars`; 60-min cooldown; `exitAvgPrice` to positionStore — `f4b7bdc`
+12. **Governance integration** — full `ai/` scaffold, `.cursor/rules/`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `README.md` added to zerotrading-core
 
-### Decisions
-
-**Bug 1 — `get_supabase()` ImportError (crash on boot)**  
-`supabase.py` exported a `db` singleton, but every module imported `get_supabase()`, which was never defined. Rewrote `supabase.py` to export `get_supabase()` (initializes once, returns cached client) and `db_run()` (async wrapper).
-
-**Bug 2 — `Position.entry_fill_cost_dollars` always `None`**  
-Field existed in the DB schema but not on the `Position` dataclass. `settle()` had a DB fallback that would have worked most of the time but was fragile and violated the principle of the dataclass being the complete in-memory record. Added the field to `Position` and `from_row()`.
-
-**Bug 3 — Decision log: 60 rows per window for NO_TRADE**  
-`log_decision()` was called on every 5-second loop tick, not once per window. A single 5-minute entry window produced up to 60 identical NO_TRADE rows in the `decisions` table. Added `_last_logged_window` dedup to `PaperTrader`: TRADE decisions always write; NO_TRADE skips if already logged for the same window.
-
-**Bug 4 — Safety floor permanently blocked paper mode**  
-`is_allowed_to_trade()` checked the real Kalshi demo account balance (which is $0 when freshly created) against the $50 safety floor. Paper mode would never trade. Introduced `_simulated_balance` (starts at $200, configurable) that tracks simulated fills and payouts. `is_allowed_to_trade()` no longer queries the real account in paper mode.
-
-**Bug 5 — `supabase-py` blocks asyncio event loop**  
-`supabase-py` v2 is a synchronous library. Calling it directly from `async` functions inside the event loop stalled WebSocket keepalives and could cause connection drops under load. Introduced `db_run(lambda db: ...)` pattern: all Supabase calls are wrapped in `asyncio.to_thread()`. **This is a permanent architectural rule** — `db_run()` is the ONLY way to call supabase-py in this codebase.
-
-**Auto-discovery — `KalshiRESTClient.discover_active_kxbtc15m()`**  
-Queries `GET /markets?ticker=KXBTC&status=open&limit=50`. Filters to `KXBTC-` prefix; excludes `KXBTCD` (hourly); if multiple open (Kalshi opens the next window early), sorts by `close_time` and takes the soonest-expiring. Raises `RuntimeError` if none found (between windows). `main.py` checks `KALSHI_MARKET_TICKER` env var first (manual override for testing), then falls back to auto-discovery at boot and on every IDLE iteration for automatic window rotation. `KALSHI_MARKET_TICKER` is now optional.
-
-### Rationale
-
-These bugs would have caused hard failures in this order: (1) crash on boot from ImportError, (2) crash or data loss at settle, (3) Supabase `decisions` table bloat, (4) no trades ever in paper mode, (5) WS disconnections under load. None would have been caught by py_compile. The auto-discovery miss was a design gap — requiring the operator to manually look up a ticker that changes every 15 minutes is operationally untenable.
-
-### Consequences
-
-- `db_run(lambda db: ...)` is now the required pattern for ALL supabase-py calls forever — supabase-py v2 will remain synchronous.
-- `PaperTrader(fsm, starting_balance=200.0)` — constructor now takes `starting_balance` param.
-- `paper.simulated_balance` — property, returns `round(self._simulated_balance, 2)`.
-- `is_allowed_to_trade()` — no longer takes any arguments (was `is_allowed_to_trade(balance)`).
-- `KALSHI_MARKET_TICKER` is optional in `.env.example` and `railway.toml`.
-- `sizing.py` / `main.py` should use `paper.simulated_balance` not real Kalshi account balance for contract sizing in paper mode.
-- Phase 1 is now actually runnable. None of it was before these fixes.
-
-### Related files
-
-**Beta repo (commit `914351a`):**
-- `src/db/supabase.py` — rewritten (get_supabase + db_run)
-- `src/execution/fsm.py` — all DB calls → db_run; entry_fill_cost_dollars on Position
-- `src/execution/paper.py` — simulated balance; decision dedup; is_allowed_to_trade() no args
-- `src/accounting/reconcile.py` — all DB calls → db_run
-- `src/accounting/pnl.py` — all DB calls → db_run
-- `src/ingestion/kalshi_rest.py` — discover_active_kxbtc15m() added
-- `main.py` — auto-discovery at boot + per-window rotation; sizing uses simulated_balance
-- `.env.example` — KALSHI_MARKET_TICKER marked optional
-- `railway.toml` — KALSHI_MARKET_TICKER marked optional
-
-**This parent repo (updated this session):**
-- `docs/ARCHITECTURE-KXBTC15M.md` — db_run pattern, simulated balance, auto-discovery, env vars
-- `ai/handoffs/CURRENT-STATE.md` — Phase 1 bug-fix complete, before-first-run steps updated
-- `CHANGELOG.md` — bug fix entry appended
+**Related files**
+- zerotrading-core `ai/summaries/DECISION-LOG.md` — full per-decision rationale
+- zerotrading-core `ai/summaries/2026-05-21-2133-core-stabilization-session.md` — session summary
+- zerotrading-core `ai/handoffs/CURRENT-STATE.md` — live state pointer

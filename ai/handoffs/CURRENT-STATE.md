@@ -2,9 +2,9 @@
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
 
-**Last updated:** 2026-05-21 21:32 ET  
+**Last updated:** 2026-05-21 21:33 ET  
 **Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack  
-**Reason for update:** Phase 1 paper mode bug fixes (5 crash-level bugs) + auto-discovery — beta commit `914351a`
+**Reason for update:** End of session — ZeroTrading Core stabilization (11 bug fixes) + governance integration into zerotrading-core
 
 ---
 
@@ -23,7 +23,32 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 
 ---
 
-## Beta Repo Status
+## ZeroTrading Core (KXBTCD - Hourly) Status
+
+- **Deployed at:** `zerotrading-core-production.up.railway.app`
+- **Mode:** LIVE (real money)
+- **Last known balance:** ~$26.42 (as of 2026-05-21 ~21:06 ET)
+- **Cycles this session:** 3+ completed (2 wins, 1 loss per operator)
+- **Latest commit:** `f4b7bdc` — "fix: fill price field names, re-entry guard, exit P&L reporting"
+- **Build status:** Passing (TypeScript clean)
+- **Governance:** `ai/` scaffold, `.cursor/rules/`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `README.md` now all present in zerotrading-core
+
+### Do Not Regress (Core)
+- Settlement: `GET /markets/{ticker}` → `status==="finalized"` — positions endpoint dropped `settled` field Dec 2025
+- Fill prices: `no_price_dollars` / `yes_price_dollars` — not `price_dollars`
+- `position_fp`: Kalshi decimal string × 10000 normalized at adapter boundary
+- Time-exit intentionally removed — do not re-add
+- Re-entry guard: 60-min cooldown per ticker (`_lastCompletedTicker`)
+- `positionStore.create()` via `ACCT_OPEN_POSITION` effect — not inline in FSM
+
+### Open Items (Core)
+- Orphaned Kalshi positions from pre-fix-6 bugs require manual review on Kalshi dashboard
+- No automated test harness exists — Phase 2 item
+- Exit P&L fields not yet verified in live cycle (fix #11 — verify in next cycle)
+
+---
+
+## Beta Repo Status (ZeroTrading 15M)
 
 **[meszaroszack/zerotradingx15minbtc](https://github.com/meszaroszack/zerotradingx15minbtc)**
 
@@ -31,105 +56,50 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 |-------|--------|--------|
 | Phase 0 — Documentation scaffold | ✅ Complete | `74192c7` |
 | Phase 1 — Python skeleton | ✅ Complete | `d205ec4` |
-| Phase 1 — Paper mode bug fixes | ✅ Complete | `914351a` |
 | Phase 2 — First paper run | ⏳ Not started | — |
 
-**Phase 1 delivered (2026-05-21 21:00 ET, commit `d205ec4`):**
+**Phase 1 delivered (2026-05-21 21:00 ET):**
 - 20 source files covering all 9 architectural layers
-- Kalshi REST + WS clients (async, RSA auth, all 3 WS channels)
-- Binance 1m kline stream
-- Feed health monitor
-- Boot + periodic reconciliation
+- Kalshi REST + WS clients (async, RSA auth)
+- Binance 1m kline stream, feed health monitor
 - Supabase-backed FSM (5 states, duplicate-trade guard)
-- Paper mode (full simulation, real Supabase records, guardrails)
 - Black-Scholes terminal probability model, 7 skip gates
-- Fee formula, P&L booking, daily summary
-- Structured JSON logger
-- main.py (boot → reconcile → paper loop)
-- Railway deploy config (Procfile, railway.toml, requirements.txt)
-- Supabase schema (6 tables, aligned to Python column names)
+- Paper mode with full simulation
+- Railway deploy config
 
-**Phase 1 bug fixes (2026-05-21 21:32 ET, commit `914351a`):**
-- Bug 1 fixed: `get_supabase()` ImportError on boot — `supabase.py` rewritten with `get_supabase()` + `db_run()` async wrapper
-- Bug 2 fixed: `Position.entry_fill_cost_dollars` added to dataclass + `from_row()`
-- Bug 3 fixed: `decisions` table dedup — `_last_logged_window` prevents 60 NO_TRADE rows per window
-- Bug 4 fixed: paper mode uses `_simulated_balance` (starts $200); safety floor no longer queries real Kalshi demo account ($0)
-- Bug 5 fixed: all supabase-py calls wrapped in `asyncio.to_thread()` via `db_run()` — permanent architectural rule
-- Auto-discovery added: `discover_active_kxbtc15m()` queries Kalshi REST; `KALSHI_MARKET_TICKER` is now optional; ticker re-discovered on every IDLE iteration for automatic window rotation
-
-**Parent repo updated in Phase 1 cross-repo sync session:**
-- `docs/ARCHITECTURE-KXBTC15M.md` — NEW (full implementation architecture)
-- `research/adapted/phase1-implementation-patterns.md` — NEW (10 design decisions)
-- `ai/summaries/DECISION-LOG.md` — APPENDED (9 architectural decisions)
-- `CHANGELOG.md` — APPENDED
-- `ai/summaries/2026-05-21-2100-phase1-cross-repo-sync.md` — NEW (session summary)
-
-**Parent repo updated in bug-fix session (this update):**
-- `docs/ARCHITECTURE-KXBTC15M.md` — UPDATED (db_run pattern, simulated balance, auto-discovery, boot sequence, env vars, Phase 2 scope)
-- `ai/summaries/DECISION-LOG.md` — APPENDED (bug fix decisions)
-- `CHANGELOG.md` — APPENDED (bug fix entry)
-- `ai/handoffs/CURRENT-STATE.md` — UPDATED (this file)
-
----
-
-## Before First Paper Run (Manual Steps Required)
-
-1. **Apply `src/db/schema.sql`** to Supabase (Supabase Studio SQL editor)
-2. **Set Railway env vars** — required: `KALSHI_API_KEY_ID`, `KALSHI_API_PRIVATE_KEY`, `KALSHI_ENV`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `APP_MODE`
-3. **`KALSHI_MARKET_TICKER` is now optional** — auto-discovery handles it. Set only if you want to force a specific ticker for testing.
-4. **Deploy to Railway** — push to beta main branch triggers build
-5. **Validate Supabase tables** — confirm `decisions` and `positions` receive records on first loop
-
----
-
-## ZeroTrading Core (KXBTCD - Hourly) Status
-
-- Deployed at `zerotrading-core-production.up.railway.app`
-- Connected to Kalshi exchange (LIVE, real money)
-- Balance: ~$4.16 (as of last check — may have changed)
-- Making NO_TRADE decisions (strike too close, net edge too low)
-- Architecture docs: `docs/pdfs/` (3 canonical PDFs)
-
----
-
-## Do Not Regress
-
-- KXBTCD and KXBTC15M are DIFFERENT markets — never mix
-- KXBTC15M is a simple binary over/under — ONE strike, TWO outcomes, NO ranges/bands
-- Settlement uses 60-second CFB RTI average beginning 1 min BEFORE expiration
-- ALL state MUST be persisted in Supabase, NEVER in-memory
-- Every boot MUST reconcile with Kalshi before entering the trading loop
-- P&L MUST come from actual fills and settlements — never from estimates
-- `client_order_id` on every order — idempotency is non-negotiable
-- Boot reconciliation raises `ReconcileError` on ORPHANED positions — do not swallow this error
+### Before First Paper Run (Manual Steps Required)
+1. Apply `src/db/schema.sql` to Supabase
+2. Set Railway env vars (all listed in beta `.env.example`)
+3. Set `KALSHI_MARKET_TICKER` to next active KXBTC15M market
+4. Deploy to Railway
+5. Validate `decisions` and `positions` tables receive records on first loop
 
 ---
 
 ## Next Steps (in order)
 
-1. **Apply schema and deploy** — First paper run (see above)
-2. **Monitor paper run** — Check `decisions` table for skip reasons; verify sigma is computing
-3. **Phase 2 work items:**
-   - Live order execution (orders.py stub → real implementation)
-   - Macro gate (FOMC/CPI calendar integration)
-   - Consecutive-loss cooldown persistence (currently in-memory, resets on restart)
+1. **Watch next Core live cycle** — verify exit P&L fields populate in dashboard after fix #11
+2. **Manually resolve orphaned Core positions** on Kalshi exchange
+3. **Apply schema + deploy 15M beta** — first paper run
+4. **Monitor 15M paper run** — check `decisions` table for skip reasons
+5. **Phase 2 (15M):** live order execution, macro gate, auto-ticker discovery, consecutive-loss cooldown
 
 ---
 
-## Research Inventory (for next agent or session)
+## Research Inventory
 
 All prior build research is committed in `research/adapted/`. Key files:
 
 | File | What it contains |
 |------|-----------------|
-| `kalshi-public-docs-api-websocket.md` | Authoritative Kalshi API/WS reference (channels, schemas, rate limits) |
-| `kalshi-btcd-trader-hourly.md` | Source of BS probability model, circuit breaker patterns |
-| `alpha-bot-15m.md` | Supabase persistence patterns, reference price alignment |
-| `probablyprofit-order-management.md` | OrderManager patterns, integrated reconciliation |
+| `kalshi-public-docs-api-websocket.md` | Authoritative Kalshi API/WS reference |
+| `kalshi-btcd-trader-hourly.md` | BS probability model, circuit breaker patterns |
+| `alpha-bot-15m.md` | Supabase persistence patterns |
+| `probablyprofit-order-management.md` | OrderManager patterns |
 | `morningside-wagewise-orderbook.md` | L3 orderbook architecture |
-| `phase1-implementation-patterns.md` | **NEW** — Phase 1 design decisions (10 documented choices) |
+| `phase1-implementation-patterns.md` | Phase 1 design decisions (15M) |
 
 Guardrails in `ai/guardrails/`:
-- `PERSISTENCE-RECONCILIATION.md` — 6 rules, 10-question self-test (REQUIRED before writing trading code)
-- `KXBTC15M-MARKET-STRUCTURE.md` — Market structure rules (REQUIRED)
+- `PERSISTENCE-RECONCILIATION.md` — 6 rules, 10-question self-test (REQUIRED)
+- `KXBTC15M-MARKET-STRUCTURE.md` — 15M market structure rules (REQUIRED for 15M work)
 - `KALSHI-MARKET-REFERENCE.md` — API field mappings and fee schedule (REQUIRED)
