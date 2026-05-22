@@ -208,3 +208,17 @@ When a bug is found in either repo:
 **Fix:** Create a production API key on kalshi.com → Settings → API Keys → Production tab. Update Railway env vars.  
 **Pattern:** #paper-live-boundary-confusion  
 **Cross-repo:** Fix in zerotradingx15minbtc env config (no code change needed).
+
+---
+
+### CRASH-009 — `401 Unauthorized` — wrong RSA padding scheme (PKCS1v15 instead of PSS)
+**Date:** 2026-05-21 22:18 ET  
+**Repo:** zerotradingx15minbtc  
+**Found by:** Perplexity Computer — cross-referenced working zerotrading-core adapter  
+**Severity:** crash  
+**Status:** fixed  
+**Symptom:** 401 on every Kalshi REST call. Key works fine on zerotrading-core.  
+**Root cause:** Phase 1 skeleton used `PKCS1v15`. Kalshi requires RSA-PSS-SHA256, salt_length=32. Documented correctly in zerotrading-core from prior sessions but not carried over to the beta skeleton.  
+**Fix:** `padding.PSS(mgf=MGF1(SHA256), salt_length=32)` in `kalshi_rest.py`.  
+**Pattern:** #import-contract-mismatch  
+**Cross-repo:** Fix in zerotradingx15minbtc. KI-009 added to RAILWAY-KNOWN-ISSUES.md.
