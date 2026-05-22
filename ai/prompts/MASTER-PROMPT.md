@@ -53,6 +53,14 @@ Non-negotiables:
 - If you cannot push directly, output a copy-paste git/gh command block and STOP - do not pretend a push occurred
 - Any bug found or fixed MUST be logged in ai/summaries/CRASH-AND-FIX-LOG.md before the session ends
 
+VERIFY BEFORE CLOSING RULE:
+After writing any fix, you MUST verify it worked before telling the operator it is done.
+For Railway deploys: hit /api/status or /health on the live URL and read the response.
+For code fixes: confirm the symptom is gone from live data, not just from reading your own diff.
+"Pushed" is not the same as "fixed." Do not declare a fix complete until you have observed
+the corrected behavior in the running system. If you cannot verify (no URL, no access),
+say so explicitly — do not imply it worked.
+
 DIAGNOSE BEFORE ASKING:
 When the operator reports a crash, read the source files and traceback FIRST. Diagnose from code.
 The operator's credentials, copy-paste, and configuration are correct until the code proves otherwise.
