@@ -13,3 +13,4 @@ alwaysApply: true
 - FSM / accounting deviations require DECISION-LOG entry.
 - Any bug found or fixed MUST be logged in `ai/summaries/CRASH-AND-FIX-LOG.md` before the session ends. Include commit hash. Also log in the child repo (`meszaroszack/zerotradingx15minbtc`) if relevant.
 - Read `ai/summaries/CRASH-AND-FIX-LOG.md` before writing any code — it lists every known crash and pattern.
+- When the operator reports a crash, read the source files and diagnose the root cause BEFORE asking them to check anything. Their credentials and copy-paste are correct until the code proves otherwise. Check yourself first.

@@ -162,3 +162,20 @@ When a bug is found in either repo:
 6. Commit to the affected child repo with the same message
 
 **If you found a bug mid-session and fixed it, the entry goes here before the session ends. Not "later". Not "in the next session". Now.**
+
+---
+
+### CRASH-006 — `SupabaseException("Invalid API key")` — supabase-py version too old to accept new key format
+**Date:** 2026-05-21 22:01 ET  
+**Repo:** zerotradingx15minbtc  
+**Found by:** Operator (first Railway deploy) + Perplexity Computer (root cause)  
+**Severity:** crash  
+**Status:** fixed  
+**Symptom:** Railway deploy crashes immediately with `raise SupabaseException("Invalid API key")`.  
+**Root cause:** `supabase==2.5.0` pinned in `requirements.txt`. Supabase's new `sb_publishable_...` key format requires `supabase-py >= 2.7.0`. The old version rejects the key as invalid regardless of whether the value is correct. Secondary bug: `get_supabase()` had a stale service role key fallback that doesn't belong in the bot at all.  
+**Fix:** Bumped to `supabase==2.30.0`. Removed service role key fallback from `get_supabase()`.  
+**Commit:** (beta repo — see next commit)  
+**Pattern:** #hardcoded-env-value  
+**Cross-repo:** Fix in zerotradingx15minbtc. Same entry in beta CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE:** When you see `Invalid API key` from supabase-py, read the code and check the version pin BEFORE asking the operator to verify their credentials. The operator's copy-paste is not the problem. Check yourself first.
