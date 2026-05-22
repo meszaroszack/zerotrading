@@ -1,16 +1,12 @@
 # CURRENT STATE
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
-**Last updated:** 2026-05-21 ~20:00 ET
-**Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack
 
-## Beta Repo Status (NEW)
+**Last updated:** 2026-05-21 21:16 ET  
+**Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack  
+**Reason for update:** Cross-repo sync after completing Phase 1 Python skeleton in beta repo
 
-[meszaroszack/zerotradingx15minbtc](https://github.com/meszaroszack/zerotradingx15minbtc) is initialized.
-- **Phase 0 (documentation scaffold): COMPLETE** — 31 files, full baseline.
-- **Phase 1 (Python skeleton): NOT STARTED**
-- See beta repo `docs/CURRENT-STATE.md` and `docs/NEXT-STEPS.md` for current beta state.
-- Cross-repo inheritance model: beta inherits from this repo; learnings flow back here.
+---
 
 ## CRITICAL: Know your market before doing ANYTHING
 
@@ -20,117 +16,106 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 
 | System | Market | Structure | Status |
 |---|---|---|---|
-| ZeroTrading Core | **KXBTCD** (hourly) | Ladder of strike prices; you pick a threshold; above/below that level | **LIVE** on Railway |
-| ZeroTrading 15M | **KXBTC15M** (15-min) | Single strike = current price; simple up/down | Paper mode (planned) |
+| ZeroTrading Core | **KXBTCD** (hourly) | Ladder of strike prices; above/below threshold | **LIVE** on Railway |
+| ZeroTrading 15M | **KXBTC15M** (15-min) | Single strike = current price; simple up/down | **Phase 1 skeleton complete** |
 
-- **KXBTCD** = strike distance, threshold selection, price ladders. Live at `zerotrading-core-production.up.railway.app`.
-- **KXBTC15M** = simple binary over/under. No ladders, no strike distance. See `ai/guardrails/KXBTC15M-MARKET-STRUCTURE.md`.
+**Do NOT mix strategies between markets.**
 
-**Do NOT mix strategies between markets.** Do NOT apply 15M logic to KXBTCD or vice versa.
+---
 
-## Where we are
+## Beta Repo Status
 
-### Phase: RESEARCH COMPLETE -> READY TO BUILD
+**[meszaroszack/zerotradingx15minbtc](https://github.com/meszaroszack/zerotradingx15minbtc)**
 
-All prior builds have been deep-dived, documented, and committed to `research/adapted/`. The strategy direction is clear. Next step is writing the KXBTC15M strategy spec and building code.
+| Phase | Status | Commit |
+|-------|--------|--------|
+| Phase 0 — Documentation scaffold | ✅ Complete | `74192c7` |
+| Phase 1 — Python skeleton | ✅ Complete | `d205ec4` |
+| Phase 2 — First paper run | ⏳ Not started | — |
 
-### ZeroTrading Core (KXBTCD - Hourly) - LIVE
+**Phase 1 delivered (2026-05-21 21:00 ET):**
+- 20 source files covering all 9 architectural layers
+- Kalshi REST + WS clients (async, RSA auth, all 3 WS channels)
+- Binance 1m kline stream
+- Feed health monitor
+- Boot + periodic reconciliation
+- Supabase-backed FSM (5 states, duplicate-trade guard)
+- Paper mode (full simulation, real Supabase records, guardrails)
+- Black-Scholes terminal probability model, 7 skip gates
+- Fee formula, P&L booking, daily summary
+- Structured JSON logger
+- main.py (boot → reconcile → paper loop)
+- Railway deploy config (Procfile, railway.toml, requirements.txt)
+- Supabase schema (6 tables, aligned to Python column names)
 
-- Deployed at `zerotrading-core-production.up.railway.app`.
-- Connected to Kalshi exchange (LIVE, real money).
-- Balance: ~$4.16 (as of last check).
-- Status: CONNECTED, evaluating KXBTCD contracts, making NO_TRADE decisions (strike too close, net edge too low).
-- Architecture docs: `docs/pdfs/` (3 canonical PDFs uploaded and verified).
+**Parent repo updated this session:**
+- `docs/ARCHITECTURE-KXBTC15M.md` — NEW (full implementation architecture)
+- `research/adapted/phase1-implementation-patterns.md` — NEW (10 design decisions)
+- `ai/summaries/DECISION-LOG.md` — APPENDED (9 architectural decisions)
+- `CHANGELOG.md` — APPENDED
+- `ai/summaries/2026-05-21-2100-phase1-cross-repo-sync.md` — NEW (session summary)
 
-### ZeroTrading 15M (KXBTC15M) - RESEARCH PHASE COMPLETE
+---
 
-**Build Inventory (7 prior builds reviewed):**
+## Before First Paper Run (Manual Steps Required)
 
-| Build | Repo | Lang | Commits | Market | Key Contribution | Research File |
-|---|---|---|---|---|---|---|
-| trader-retro | meszaroszack/trader-retro | TS | few | 15m | Swing detection, Kalshi API typing | research/adapted/trader-retro-15m.md |
-| kalshi-15m-bot | meszaroszack/kalshi-15m-bot | Python | moderate | 15m | Modular architecture, WebSocket, 6 strategies, RiskGuard | research/adapted/kalshi-15m-bot-15m.md |
-| kalshi-ai-trader-v2 | meszaroszack/kalshi-ai-trader-v2 | TS | 12 | 15m | Regime detection, AI decision engine, penny hunting | research/adapted/kalshi-ai-trader-v2-15m.md |
-| alpha-bot | meszaroszack/alpha-bot | JS | 22 | 15m | 4 strategies, Supabase persistence, reference price alignment | research/adapted/alpha-bot-15m.md |
-| kalshi-trader | meszaroszack/kalshi-trader | TS | 111 | 15m | External signals, bracket orders, hour-based bias, decay entries | research/adapted/kalshi-trader-15m.md |
-| kalshi-btcd-trader | meszaroszack/kalshi-btcd-trader | TS | 20 | Hourly | **Terminal probability model (Black-Scholes), edge calculation, circuit breakers** | research/adapted/kalshi-btcd-trader-hourly.md |
-| Mystic (external) | N/A | N/A | N/A | 15m | 134W/3L performance benchmark, directional momentum | research/mystic/ |
+1. **Apply `src/db/schema.sql`** to Supabase (Supabase Studio SQL editor)
+2. **Set Railway env vars** — all vars listed in beta `.env.example`
+3. **Set `KALSHI_MARKET_TICKER`** — find the next active KXBTC15M market on Kalshi
+4. **Deploy to Railway** — push to beta main branch triggers build
+5. **Validate Supabase tables** — confirm `decisions` and `positions` receive records on first loop
 
-**Stubs/Empty (no code to mine):** kalshi-15m-scalper, Dopealkshi, kalshi-btcd-ai-trader (1-commit snapshot)
+---
 
-**Dashboard/UI only:** compd-trader (Next.js dashboard for alpha-bot), cursor-kalshi-dashboard
+## ZeroTrading Core (KXBTCD - Hourly) Status
 
-### Cross-Build Synthesis: What Actually Matters
+- Deployed at `zerotrading-core-production.up.railway.app`
+- Connected to Kalshi exchange (LIVE, real money)
+- Balance: ~$4.16 (as of last check — may have changed)
+- Making NO_TRADE decisions (strike too close, net edge too low)
+- Architecture docs: `docs/pdfs/` (3 canonical PDFs)
 
-Every build shares the same two fatal flaws:
-1. **No persistence** — In-memory or file-based. Railway restarts orphan positions.
-2. **No exchange reconciliation** — Local P&L never verified against Kalshi.
-
-The builds that got closest to working:
-- **kalshi-btcd-trader** has the right architecture (probability model, edge calc, circuit breakers) but targets hourly
-- **alpha-bot** has the right infrastructure (Supabase, reference price alignment) but wrong signal source (technical indicators on binaries)
-- **kalshi-trader** has the most iteration (111 commits) but never converged — classic AI drift
-
-### Strategy Direction for KXBTC15M
-
-**Core approach: Probability-edge trading (adapted from kalshi-btcd-trader)**
-1. Compute model fair value using terminal probability (Black-Scholes, per-minute sigma from Binance 1m candles)
-2. Compare model probability to market-implied probability (contract price)
-3. Trade when edge exceeds fee + slippage threshold
-4. Hold to settlement (natural exit for 15-min binary)
-
-**Supporting signals:**
-- Reference price alignment (from alpha-bot)
-- Regime detection (from kalshi-btcd-trader)
-- External signals: funding rate, OB pressure (from kalshi-trader)
-- Hour-based confidence adjustment (from kalshi-trader)
-
-**Infrastructure:**
-- Python (ecosystem advantage for quant)
-- Supabase persistence (from alpha-bot pattern)
-- Boot reconciliation (fetch open positions on restart)
-- Paper mode from day one
-- Fee-aware accounting
-
-## Next Steps
-
-1. **Write `docs/STRATEGY-KXBTC15M.md` v2** — Full spec based on research synthesis
-2. **Build code skeleton** — Python, paper mode, Supabase, probability model
-3. **Validate probability model** — Backtest against historical 15-min settlements
-4. **Paper trade** — Run against live markets without real money
-5. **Go live** — Small balance, monitor, iterate
+---
 
 ## Do Not Regress
 
-- KXBTCD and KXBTC15M are DIFFERENT markets
-- KXBTC15M is a simple binary over/under, NOT convergence/range/wedge
+- KXBTCD and KXBTC15M are DIFFERENT markets — never mix
+- KXBTC15M is a simple binary over/under — ONE strike, TWO outcomes, NO ranges/bands
 - Settlement uses 60-second CFB RTI average beginning 1 min BEFORE expiration
-- Maker orders have NO fees; settlement has NO fees
-- Technical indicators (RSI/MACD/BB) are dubious for 15-min binary outcomes
-- The real edge is model probability vs market-implied probability, not pattern recognition
-- **ALL state MUST be persisted in Supabase, NEVER in-memory or file-based** (see `ai/guardrails/PERSISTENCE-RECONCILIATION.md`)
-- **Every boot MUST reconcile positions and balance with Kalshi exchange** before entering the trading loop
-- **P&L MUST come from actual Kalshi fill prices and settlements**, not from bid/ask estimates
-- No code that touches trading/execution/state is ready for review until the 10-question self-test in PERSISTENCE-RECONCILIATION.md passes
+- ALL state MUST be persisted in Supabase, NEVER in-memory
+- Every boot MUST reconcile with Kalshi before entering the trading loop
+- P&L MUST come from actual fills and settlements — never from estimates
+- `client_order_id` on every order — idempotency is non-negotiable
+- Boot reconciliation raises `ReconcileError` on ORPHANED positions — do not swallow this error
 
+---
 
-### Kalshi API & WebSocket Engineering (Added 2026-05-21)
+## Next Steps (in order)
 
-**Research complete.** Three new deep-dives committed:
-- `research/adapted/kalshi-public-docs-api-websocket.md` - Authoritative Kalshi API/WS reference (channels, message schemas, rate limits, market lifecycle)
-- `research/adapted/morningside-wagewise-orderbook.md` - L3 orderbook architecture patterns (O(1) lookups, feed/engine separation)
-- `research/adapted/probablyprofit-order-management.md` - OrderManager patterns (event callbacks, integrated reconciliation, Kelly sizing)
+1. **Apply schema and deploy** — First paper run (see above)
+2. **Monitor paper run** — Check `decisions` table for skip reasons; verify sigma is computing
+3. **Phase 2 work items:**
+   - Live order execution (orders.py stub → real implementation)
+   - Macro gate (FOMC/CPI calendar integration)
+   - Auto-ticker discovery from Kalshi REST catalog
+   - Consecutive-loss cooldown persistence
 
-**Guardrails hardened:**
-- `ai/guardrails/PERSISTENCE-RECONCILIATION.md` updated with Rule 5 (WebSocket real-time reconciliation) and Rule 6 (rate limit budget management)
-- Self-test expanded from 6 to 10 questions
-- Related documents section cross-references all three research files
+---
 
-**Key new requirements for any agent writing trading code:**
-1. Subscribe to BOTH `user_orders` AND `fill` WebSocket channels
-2. Atomic Supabase write on every fill event BEFORE acting on it
-3. Use `client_order_id` as correlation key (idempotency)
-4. Use `taker_fill_cost_dollars` / `maker_fill_cost_dollars` for P&L (includes fees)
-5. Re-bootstrap state on every WebSocket reconnect
-6. Periodic 60s REST reconciliation as safety net
-7. Exponential backoff with jitter on 429s and WS disconnects
+## Research Inventory (for next agent or session)
+
+All prior build research is committed in `research/adapted/`. Key files:
+
+| File | What it contains |
+|------|-----------------|
+| `kalshi-public-docs-api-websocket.md` | Authoritative Kalshi API/WS reference (channels, schemas, rate limits) |
+| `kalshi-btcd-trader-hourly.md` | Source of BS probability model, circuit breaker patterns |
+| `alpha-bot-15m.md` | Supabase persistence patterns, reference price alignment |
+| `probablyprofit-order-management.md` | OrderManager patterns, integrated reconciliation |
+| `morningside-wagewise-orderbook.md` | L3 orderbook architecture |
+| `phase1-implementation-patterns.md` | **NEW** — Phase 1 design decisions (10 documented choices) |
+
+Guardrails in `ai/guardrails/`:
+- `PERSISTENCE-RECONCILIATION.md` — 6 rules, 10-question self-test (REQUIRED before writing trading code)
+- `KXBTC15M-MARKET-STRUCTURE.md` — Market structure rules (REQUIRED)
+- `KALSHI-MARKET-REFERENCE.md` — API field mappings and fee schedule (REQUIRED)

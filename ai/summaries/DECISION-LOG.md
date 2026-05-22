@@ -481,3 +481,73 @@ Documentation-first ensures any agent reading the beta repo can understand what 
 - [beta repo README](https://github.com/meszaroszack/zerotradingx15minbtc/blob/main/README.md)
 - [beta docs/CURRENT-STATE.md](https://github.com/meszaroszack/zerotradingx15minbtc/blob/main/docs/CURRENT-STATE.md)
 - [beta docs/NEXT-STEPS.md](https://github.com/meszaroszack/zerotradingx15minbtc/blob/main/docs/NEXT-STEPS.md)
+
+---
+
+## 2026-05-21 21:00 ET — Phase 1 Python skeleton complete (beta repo)
+
+**Author:** Perplexity Computer (Comet) on behalf of meszaroszack  
+**Session:** `ai/summaries/2026-05-21-2100-phase1-cross-repo-sync.md` (this repo); beta `ai/summaries/2026-05-21-2100-phase1-skeleton.md`  
+**Beta commit:** `d205ec4` on `meszaroszack/zerotradingx15minbtc`  
+**Status:** decided — implemented, syntax-verified, not yet live  
+**Scope:** implementation | architecture | cross-repo sync  
+
+### Context
+
+This entry is a **cross-repo sync** written immediately after completing Phase 1 of the beta build (zerotradingx15minbtc). The beta went from zero source code to a complete Python skeleton covering all 9 architectural layers in a single session. These decisions are ported here because they are durable architectural choices that future agents should inherit.
+
+**This parent repo's CURRENT-STATE was last updated at Phase 0 completion (20:00 ET). These entries reflect the Phase 1 session that followed (21:00 ET the same night).**
+
+### Decisions
+
+**1. Zero-drift Black-Scholes for KXBTC15M terminal probability**  
+Formula: `P(YES wins) = N(d2)` where `d2 = (ln(S/K) − 0.5σ²T) / (σ√T)`.  
+Drift set to zero: BTC 15-minute drift is dominated by diffusion noise; estimating it from a 20-candle window introduces more error than it removes. Risk-neutral zero-drift is better calibrated against historical settlements.
+
+**2. Taker-only fees in paper mode (conservative bias)**  
+Paper mode computes all fills at taker cost: `ceil(0.07 * C * P * (1-P))`. Live mode will use `taker_fill_cost_dollars` from the WS fill event. Conservative paper bias avoids overstating simulated P&L.
+
+**3. Supabase-backed FSM — no in-memory state**  
+Every state transition writes to Supabase before returning. The `ExecutionFSM` object holds only `active_position_id`. Restart → `fsm.boot()` reads non-IDLE rows and restores state. This directly solves the root cause of every prior build failure.
+
+**4. Duplicate-trade guard on `(market_ticker, window_open_time)`**  
+Before creating an EVALUATING record, the FSM checks for an existing non-IDLE record for the same ticker and window. Any match raises `FSMTransitionError`. Prevents duplicate trades on restart mid-window.
+
+**5. `client_order_id` (UUID) on every order**  
+Set before submission; stored in `positions.client_order_id`. Kalshi API is idempotent on this field. Prevents duplicate orders if network drops between submit and acknowledgement.
+
+**6. P&L only booked at SETTLING → IDLE (confirmed settlement)**  
+`book_realized_pnl()` is called exclusively inside `PaperTrader.settle()`, which is only reachable from `SETTLING` state. Idempotency guard in `pnl.py` prevents double-booking if settle is called twice.
+
+**7. Boot reconciliation before any evaluation (hard block)**  
+`boot_reconcile()` raises `ReconcileError` on ORPHANED positions (Kalshi has a position with no Supabase record). This is the only correct response — a human must review before the bot continues. GHOST and DIVERGED are auto-resolved with Kalshi as truth.
+
+**8. Feed health gates every evaluation cycle**  
+Kalshi WS stale > 30s or Binance WS stale > 90s blocks evaluation. Prevents trading on stale orderbook or stale sigma.
+
+**9. All 7 skip gates fire in strict order — first failure returns immediately**  
+Order: INSUFFICIENT_DATA → EXTREME_VOL → ELEVATED_VOL → MACRO_BLOCKED → ENTRY_WINDOW_CLOSED → SPREAD_TOO_WIDE → EDGE_INSUFFICIENT. Every NO_TRADE decision includes the exact fail reason, written to `decisions` table.
+
+### Consequences
+
+- Beta Phase 1 is complete. 20 files committed, all syntax-verified.
+- `src/execution/orders.py` is a stub for live trading (Phase 2).
+- Macro gate in `context.macro_gate_ok` is always True (Phase 2 stub).
+- `KALSHI_MARKET_TICKER` must be set manually in Railway env (Phase 2: auto-discover).
+- Schema must be applied to Supabase before first run (`src/db/schema.sql`).
+- Parent repo `docs/ARCHITECTURE-KXBTC15M.md` created this session (NEW).
+- Parent repo `research/adapted/phase1-implementation-patterns.md` created this session (NEW).
+
+### Related files
+
+**Beta repo (meszaroszack/zerotradingx15minbtc):**
+- All `src/` files (commit `d205ec4`)
+- `ai/summaries/2026-05-21-2100-phase1-skeleton.md`
+- `ai/handoffs/CURRENT-STATE.md`
+- `src/db/schema.sql`
+
+**This parent repo (meszaroszack/zerotrading):**
+- `docs/ARCHITECTURE-KXBTC15M.md` (NEW — full implementation architecture)
+- `research/adapted/phase1-implementation-patterns.md` (NEW — design decisions)
+- `ai/summaries/2026-05-21-2100-phase1-cross-repo-sync.md` (this session)
+- `ai/handoffs/CURRENT-STATE.md` (updated)
