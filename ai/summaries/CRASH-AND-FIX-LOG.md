@@ -296,3 +296,30 @@ Kalshi signature message = `timestamp_ms + METHOD + /trade-api/v2 + path_without
 
 **AGENT NOTE — HARD RULE:**  
 The HTTP server (`start_dashboard()`) must be the FIRST thing called in `run()`. Never move it after any async boot step. Railway's healthcheck does not wait for your boot sequence. The dashboard is designed to serve partial/empty state during boot — this is intentional and correct.
+
+---
+
+### CRASH-014 — Dashboard shows UNKNOWN/DISCONNECTED/blank — state wiring broken in 5 places
+**Date:** 2026-05-22 01:35 ET  
+**Found by:** Operator (dashboard live but showing no data)  
+**Severity:** major (dashboard non-functional, bot still trades)  
+**Status:** fixed  
+**Symptom:** Dashboard up, /health 200, but FSM shows UNKNOWN, feeds show DISCONNECTED, BTC spot blank, log tail empty.  
+**Root cause (5 independent issues):**  
+1. `_LogBufferHandler` was wired inside a function (`_wire_log_handler()`) — if health.py was imported late, early log lines were missed. Fix: attach to root logger at module level, at import time.  
+2. `health.py` was not imported before first logging call in main.py — the log buffer missed all boot logs. Fix: `import src.ops.health as _health_module` at top of main.py.  
+3. `register_shared_state()` used `asyncio.get_event_loop()` which returns the wrong loop if called from inside a running coroutine. Fix: `asyncio.get_running_loop()` first, fall back to `get_event_loop()`.  
+4. Feed health fallback was missing the correct attribute path `.kalshi.is_live` / `.binance.is_live` (the nested FeedStatus dataclass). Fix: try `_feed_health.kalshi.is_live` as primary fallback.  
+5. BTC spot read assumed `btc_spot` was always a list — not defensive against future refactor. Fix: `isinstance` check for list/tuple/scalar.  
+**Fix:** 5 targeted edits across `src/ops/health.py`, `src/ops/dashboard.py`, `main.py`.  
+**Commit:** `a980810`  
+**Pattern:** #state-wiring, #import-order  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULES:**  
+- `_LogBufferHandler` must be attached at module level (not inside a function) so it fires on import.  
+- `import src.ops.health` must be the first import in main.py after stdlib, before any other project module.  
+- Use `asyncio.get_running_loop()` inside a coroutine context, not `get_event_loop()`.  
+- `ExecutionFSM` has NO in-memory `_state`. It is DB-backed. `current_state()` is always a Supabase query.  
+- `FeedHealthMonitor.status_dict()` is the canonical read path. Fallback is `.kalshi.is_live` / `.binance.is_live` on the nested `FeedStatus` dataclass.  
+- `SharedState.btc_spot` is `list[float]` — read as `btc_spot[0]`.
