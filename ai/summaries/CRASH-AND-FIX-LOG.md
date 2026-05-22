@@ -340,3 +340,22 @@ The HTTP server (`start_dashboard()`) must be the FIRST thing called in `run()`.
 
 **AGENT NOTE — HARD RULE:**  
 Never call async coroutines from a sync thread (HTTP handler, background thread) to read bot state. The pattern is: async loop calls `push_state()` after every `await fsm.current_state()`, HTTP thread reads the cached primitives. `FeedHealthMonitor.status_dict()` is sync-safe (pure time math). `ExecutionFSM.current_state()` is NEVER sync-safe — it always hits Supabase.
+
+---
+
+### CRASH-016 — Silent boot crash: uncaught httpx.HTTPStatusError from boot_reconcile
+**Date:** 2026-05-22 01:58 ET  
+**Found by:** Perplexity Computer — read reconcile.py and main.py after inspecting live /api/status  
+**Severity:** crash (boot loops every ~6 minutes, dashboard stays in perpetual UNKNOWN state)  
+**Status:** fixed  
+**Symptom:** Dashboard live at /health 200, but fsm_state=UNKNOWN, btc_spot=0, feeds DISCONNECTED, uptime resets every 5–6 minutes. Bot never reaches _paper_loop.  
+**Root cause:** `boot_reconcile()` calls `await rest.get_positions()` with no try/except. Any Kalshi REST error (401, 403, 5xx, connection timeout) raises `httpx.HTTPStatusError`. In `main.py`, the `except ReconcileError` block only catches `ReconcileError` — an `httpx.HTTPStatusError` escapes uncaught, crashes `run()`, and Railway restarts the process. Every restart hits the same error, creating an infinite restart loop. The bot process was live (dashboard answering /health) but never surviving past boot_reconcile.  
+**Fix:**  
+1. Wrapped `rest.get_positions()` in `boot_reconcile()` with `try/except Exception` that converts any transport error into `ReconcileError`.  
+2. Changed `main.py` boot reconcile block from single `try/except → sys.exit(2)` to `while True` retry loop. Transport failures retry every 30s. Only ORPHANED (logic error requiring manual review) calls `sys.exit(2)`.  
+**Commit:** `abd7478`  
+**Pattern:** #uncaught-exception, #boot-loop  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULE:**  
+Every `await rest.*()` call in boot_reconcile and anywhere in the boot sequence must be wrapped in try/except. An unhandled httpx error before the trading loop starts will silently crash the process. The Railway restart loop symptom is: dashboard at /health 200, uptime resets every few minutes, fsm_state always UNKNOWN.
