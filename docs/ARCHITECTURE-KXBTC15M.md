@@ -1,6 +1,6 @@
 # ZeroTrading x15minBTC — Implementation Architecture
 
-> **Status:** Phase 1 skeleton complete (2026-05-21)  
+> **Status:** Phase 1 complete + paper mode bug fixes applied (2026-05-21)  
 > **Beta repo:** [meszaroszack/zerotradingx15minbtc](https://github.com/meszaroszack/zerotradingx15minbtc)  
 > **Source of truth for implementation:** beta repo `docs/ARCHITECTURE.md`, `src/`  
 > **This document:** canonical reference in the parent repo — updated from beta after sessions
@@ -83,7 +83,11 @@ zerotradingx15minbtc/
 ├── .env.example                     ← All required env vars documented
 ├── src/
 │   ├── db/
-│   │   ├── supabase.py              ← Singleton client (env: SUPABASE_URL/ANON_KEY)
+│   │   ├── supabase.py              ← get_supabase() + db_run() async wrapper
+│   │   │                               ALL supabase-py calls MUST go through db_run()
+│   │   │                               supabase-py v2 is synchronous; db_run wraps
+│   │   │                               every call in asyncio.to_thread() to avoid
+│   │   │                               blocking the event loop (permanent rule)
 │   │   └── schema.sql               ← Full DDL — 6 tables (apply once to Supabase)
 │   ├── ingestion/
 │   │   ├── kalshi_rest.py           ← Async class: KalshiRESTClient
@@ -154,15 +158,20 @@ zerotradingx15minbtc/
 
 ```
 1. validate_env()           → fail-fast if any required var missing
-2. fsm.boot()               → read non-IDLE positions from Supabase; restore state
-3. boot_reconcile(rest)     → compare Supabase positions vs Kalshi live positions
+2. auto_discover_ticker()   → check KALSHI_MARKET_TICKER env var (manual override)
+                               or call discover_active_kxbtc15m() via Kalshi REST
+                               raises RuntimeError if no KXBTC15M market is open
+3. fsm.boot()               → read non-IDLE positions from Supabase; restore state
+4. boot_reconcile(rest)     → compare Supabase positions vs Kalshi live positions
      CLEAN    → proceed
      DIVERGED → update Supabase qty from Kalshi truth; proceed
      GHOST    → mark position SETTLING; proceed
      ORPHANED → raise ReconcileError; HALT (manual review required)
-4. Start WS tasks           → kalshi_ws, binance_ws, health_loop (background)
-5. Wait 30s warmup          → let Binance deliver ~30 candles for sigma computation
-6. Enter paper loop         → evaluate every 5s
+5. Start WS tasks           → kalshi_ws, binance_ws, health_loop (background)
+6. Wait 30s warmup          → let Binance deliver ~30 candles for sigma computation
+7. Enter paper loop         → evaluate every 5s
+                               On every IDLE iteration: re-discover ticker if no
+                               manual override — handles automatic window rotation
 ```
 
 ---
@@ -243,8 +252,12 @@ Default when insufficient data: EXTREME (fail conservative).
 | P&L | Computed from sim fill | Computed from `taker_fill_cost_dollars` |
 | Settlement | Poll Kalshi REST market result | Same |
 | Risk guardrails | Active | Active |
+| Balance source | `paper.simulated_balance` (starts $200) | Real Kalshi account balance |
 
 Paper mode is NOT a stub. All records are real. The only difference is no real money moves.
+
+**`PaperTrader` constructor:** `PaperTrader(fsm, starting_balance=200.0)`  
+**`paper.simulated_balance`** — property; tracks fills deducted and payouts credited; used for contract sizing and the `$50 safety floor` guardrail. The real Kalshi demo account balance is NOT queried in paper mode.
 
 ---
 
@@ -267,7 +280,6 @@ Paper mode is NOT a stub. All records are real. The only difference is no real m
 KALSHI_API_KEY_ID
 KALSHI_API_PRIVATE_KEY       # RSA PEM, \n escaped for Railway
 KALSHI_ENV                   # demo | production
-KALSHI_MARKET_TICKER         # e.g. KXBTC-25MAY2112-T100000
 
 # Supabase
 SUPABASE_URL
@@ -278,6 +290,8 @@ SUPABASE_SERVICE_ROLE_KEY
 APP_MODE                     # paper | safe-live | production
 
 # Optional (defaults shown)
+KALSHI_MARKET_TICKER         # manual override — if unset, auto-discovers from REST
+                             # format: KXBTC-25MAY2112-T100000
 BINANCE_WS_URL               # wss://stream.binance.com:9443/ws/btcusdt@kline_1m
 LOG_LEVEL                    # INFO
 DAILY_LOSS_CAP_USD           # 50
@@ -293,10 +307,11 @@ MAX_RISK_PER_TRADE_USD       # 20
 
 - Live order execution (`orders.py` is a stub that raises `NotImplementedError`)
 - Macro gate (FOMC/CPI/NFP calendar integration)
-- Auto-discovery of active KXBTC15M market ticker from Kalshi REST catalog
 - Backtesting harness
 - Consecutive-loss cooldown persistence (currently in-memory; resets on restart)
 - Maker order logic (Phase 1 always models taker)
+
+> **Note:** Auto-discovery of the active KXBTC15M ticker was added in the Phase 1 bug-fix session (beta commit `914351a`). It is NOT a Phase 2 item.
 
 ---
 
@@ -311,3 +326,4 @@ MAX_RISK_PER_TRADE_USD       # 20
 | Beta repo | [meszaroszack/zerotradingx15minbtc](https://github.com/meszaroszack/zerotradingx15minbtc) |
 | Beta DECISION-LOG | beta `ai/summaries/DECISION-LOG.md` |
 | Beta session summary (Phase 1) | beta `ai/summaries/2026-05-21-2100-phase1-skeleton.md` |
+| Beta session summary (Phase 1 bug fixes) | beta `ai/summaries/2026-05-21-2132-paper-bugfix.md` |
