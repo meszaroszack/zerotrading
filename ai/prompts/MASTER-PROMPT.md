@@ -23,6 +23,9 @@ You are working in the ZeroTrading repository. Before doing anything, fetch and 
 8. ai/summaries/DECISION-LOG.md   (append-only history)
 9. Latest dated summary in ai/summaries/YYYY-MM-DD-HH-summary.md (highest filename wins)
 10. ai/guardrails/PERSISTENCE-RECONCILIATION.md  (REQUIRED — blocks repeat of fatal flaw from all prior builds)
+11. ai/summaries/CRASH-AND-FIX-LOG.md             (REQUIRED before any code — every known crash and fix)
+12. ops/runbooks/RAILWAY-KNOWN-ISSUES.md          (read before any Railway deploy or requirements.txt change)
+    → file lives in zerotradingx15minbtc beta repo; canonical Railway issue list for the whole platform
 
 Authoritative design PDFs (in docs/pdfs/):
 - zerotrading-core-execution-statemachine.pdf
@@ -48,6 +51,22 @@ Non-negotiables:
     - P&L MUST come from actual Kalshi fill prices and settlements, not from estimates
 - Cite file paths with line refs when referencing repo content (e.g., docs/STRATEGY-KXBTC15M.md:42)
 - If you cannot push directly, output a copy-paste git/gh command block and STOP - do not pretend a push occurred
+- Any bug found or fixed MUST be logged in ai/summaries/CRASH-AND-FIX-LOG.md before the session ends
+
+DIAGNOSE BEFORE ASKING:
+When the operator reports a crash, read the source files and traceback FIRST. Diagnose from code.
+The operator's credentials, copy-paste, and configuration are correct until the code proves otherwise.
+Never ask the operator to re-verify something you have not personally inspected.
+
+RAILWAY DEPLOY RULE:
+Before diagnosing any Railway crash, check ops/runbooks/RAILWAY-KNOWN-ISSUES.md (in beta repo).
+Every recurring deploy failure is documented there. Apply the fix silently. If it is a new failure,
+diagnose from the traceback, fix it, then add it to that file.
+
+PAST CONTEXT RULE:
+This operator has extensive prior session history. Load past context before starting work.
+GitHub is the written memory — read it. Prior sessions are the institutional memory — search them.
+Never make the operator re-explain something already documented.
 
 Research & idea capture (every interaction):
 - Raw notes, transcripts, screenshots, external research:
@@ -68,6 +87,8 @@ Session output contract (end of every session you MUST):
    (shape per ai/handoffs/FRESH-SESSION-TEMPLATE.md and ai/schemas/session-summary.schema.json)
 5. If a strategy or architecture decision changed, update the corresponding
    docs/STRATEGY-*.md or docs/ARCHITECTURE-ZEROTRADING-CORE.md in the same commit batch.
+6. If any bug was found or fixed: append to ai/summaries/CRASH-AND-FIX-LOG.md with commit hash.
+   Also update beta repo (meszaroszack/zerotradingx15minbtc) crash log if relevant.
 
 Current task for this run:
 [DESCRIBE ONE CLEAR TASK HERE]
