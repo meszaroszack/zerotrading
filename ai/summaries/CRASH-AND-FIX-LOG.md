@@ -222,3 +222,19 @@ When a bug is found in either repo:
 **Fix:** `padding.PSS(mgf=MGF1(SHA256), salt_length=32)` in `kalshi_rest.py`.  
 **Pattern:** #import-contract-mismatch  
 **Cross-repo:** Fix in zerotradingx15minbtc. KI-009 added to RAILWAY-KNOWN-ISSUES.md.
+
+---
+
+### CRASH-010 — `401 Unauthorized` — wrong production base URL
+**Date:** 2026-05-22 00:58 ET  
+**Found by:** Operator — confirmed correct domain via companion repo meszaroszack/zerotrading-core  
+**Severity:** crash  
+**Status:** fixed  
+**Symptom:** `401 Unauthorized` on all authenticated Kalshi REST calls after RSA-PSS fix (CRASH-009). Auth signing is correct.  
+**Root cause:** `_BASE_URL` was set to `https://trading-api.kalshi.com/trade-api/v2`. The correct production domain is `https://api.elections.kalshi.com/trade-api/v2`. Confirmed working in `zerotrading-core/src/adapter/kalshi.ts`. Wrong domain always returns 401 regardless of signing correctness.  
+**Fix:** Changed `_BASE_URL` production branch in `kalshi_rest.py` from `trading-api.kalshi.com` to `api.elections.kalshi.com`.  
+**Commit:** `86ff62b` (beta repo)  
+**Pattern:** #wrong-endpoint  
+
+**AGENT NOTE — HARD RULE:**  
+Kalshi production REST base URL is `https://api.elections.kalshi.com/trade-api/v2`. Never use `trading-api.kalshi.com`. When a 401 persists after confirming signing is correct, check the base URL against the working implementation in `zerotrading-core/src/adapter/kalshi.ts`.
