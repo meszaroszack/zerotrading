@@ -276,3 +276,23 @@ Kalshi signature message = `timestamp_ms + METHOD + /trade-api/v2 + path_without
 **AGENT NOTE — HARD RULES:**  
 - Kalshi series filter param is `series_ticker`, not `ticker`. Use `series_ticker=KXBTC15M` to get only 15-minute BTC markets.  
 - Never `sys.exit()` on a transient discovery failure at boot. KXBTC15M markets roll every 15 minutes — there is a brief window where no market is open. Always retry with sleep.
+
+---
+
+### CRASH-013 — Railway healthcheck failure — HTTP server starts too late
+**Date:** 2026-05-22 01:29 ET  
+**Found by:** Operator  
+**Severity:** crash (Railway marks deploy failed, restarts process)  
+**Status:** fixed  
+**Symptom:** Railway logs "Healthcheck failure" exactly 10 seconds after deploy. Bot may be fully functional but Railway kills and restarts it because `/health` never returned 200 within the healthcheck window.  
+**Root cause:** `start_dashboard()` was called after the full boot sequence — after Supabase init, FSM restore, boot reconciliation, and ticker discovery. Any of these steps hanging (slow DB, Kalshi API blip, between-window discovery retry) delays the HTTP server startup past Railway's 10s healthcheck timeout.  
+**Fix:**  
+1. `start_dashboard()` moved to the very first line of `run()`, before `validate_env()` and all other boot steps. `/health` returns 200 within ~1 second of process start.  
+2. `_cache_loop()` now sleeps 30s before first DB fetch — Supabase is not ready when the dashboard thread starts. The cache serves empty data during the boot window, which is correct behavior.  
+3. `register_shared_state()` remains after boot completes, wiring live FSM/feed state into the dashboard once the system is ready.  
+**Commit:** `43af109`  
+**Pattern:** #healthcheck-timing  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md. Added to RAILWAY-KNOWN-ISSUES.md as KI-013.
+
+**AGENT NOTE — HARD RULE:**  
+The HTTP server (`start_dashboard()`) must be the FIRST thing called in `run()`. Never move it after any async boot step. Railway's healthcheck does not wait for your boot sequence. The dashboard is designed to serve partial/empty state during boot — this is intentional and correct.
