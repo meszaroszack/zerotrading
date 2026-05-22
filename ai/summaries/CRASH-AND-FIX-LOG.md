@@ -179,3 +179,18 @@ When a bug is found in either repo:
 **Cross-repo:** Fix in zerotradingx15minbtc. Same entry in beta CRASH-AND-FIX-LOG.md.
 
 **AGENT NOTE:** When you see `Invalid API key` from supabase-py, read the code and check the version pin BEFORE asking the operator to verify their credentials. The operator's copy-paste is not the problem. Check yourself first.
+
+---
+
+### CRASH-007 — `ModuleNotFoundError: No module named 'websockets.asyncio'` — hard pin blocked dependency upgrade
+**Date:** 2026-05-21 22:07 ET  
+**Repo:** zerotradingx15minbtc  
+**Found by:** Operator (Railway deploy logs)  
+**Severity:** crash  
+**Status:** fixed  
+**Symptom:** `ModuleNotFoundError: No module named 'websockets.asyncio'` on boot. Introduced by CRASH-006 fix.  
+**Root cause:** `websockets==12.0` hard pin blocked pip from installing `websockets>=13.0` which `realtime==2.30.0` (transitive dep of `supabase==2.30.0`) requires.  
+**Fix:** Loosened `requirements.txt` pins to `>=` minimums. `supabase` stays pinned at `==2.30.0`.  
+**Commit:** (next commit in zerotradingx15minbtc)  
+**Pattern:** #hardcoded-env-value  
+**Cross-repo:** Fix in zerotradingx15minbtc. Same entry in beta CRASH-AND-FIX-LOG.md.
