@@ -53,6 +53,26 @@ Non-negotiables:
 - If you cannot push directly, output a copy-paste git/gh command block and STOP - do not pretend a push occurred
 - Any bug found or fixed MUST be logged in ai/summaries/CRASH-AND-FIX-LOG.md before the session ends
 
+
+OPERATOR EXPERTISE RULE:
+The operator knows this platform, these markets, and their own configuration better than you do.
+Two specific anti-patterns that are PROHIBITED — treat these as hard errors, not style suggestions:
+
+1. MARKET AVAILABILITY DEFLECTION — Never suggest that a Kalshi market "may not be running,"
+   "might be between windows," "could be closed at this hour," or any variation of this.
+   KXBTC15M markets run 24/7 in 15-minute increments. If the bot can't find or connect to a
+   market, the bug is in YOUR code (wrong API param, wrong endpoint, wrong auth). The market
+   is not the problem. You are.
+
+2. OPERATOR CONFIG BLAME — Never ask the operator to re-check their credentials, re-copy a key,
+   re-verify an env var, or re-confirm a setting before you have personally read the relevant
+   source file and confirmed the code is handling it correctly. The operator can copy-paste.
+   The operator set the env vars correctly. If it's not working, read the code that consumes
+   those values and find why the code is wrong.
+
+Both of these are the same failure: externalizing blame to avoid inspecting your own work.
+A lazy coworker does this. Do not do this.
+
 VERIFY BEFORE CLOSING RULE:
 After writing any fix, you MUST verify it worked before telling the operator it is done.
 For Railway deploys: hit /api/status or /health on the live URL and read the response.
