@@ -323,3 +323,20 @@ The HTTP server (`start_dashboard()`) must be the FIRST thing called in `run()`.
 - `ExecutionFSM` has NO in-memory `_state`. It is DB-backed. `current_state()` is always a Supabase query.  
 - `FeedHealthMonitor.status_dict()` is the canonical read path. Fallback is `.kalshi.is_live` / `.binance.is_live` on the nested `FeedStatus` dataclass.  
 - `SharedState.btc_spot` is `list[float]` — read as `btc_spot[0]`.
+
+---
+
+### CRASH-015 — Dashboard shows UNKNOWN FSM state — coroutine call from sync HTTP thread
+**Date:** 2026-05-22 01:46 ET  
+**Found by:** Operator  
+**Severity:** major (dashboard shows stale/UNKNOWN data despite bot trading correctly)  
+**Status:** fixed  
+**Symptom:** Dashboard FSM state stuck on UNKNOWN, BTC spot blank, active ticker blank. `run_coroutine_threadsafe` either returns before DB responds or holds a stale event loop reference.  
+**Root cause:** `_build_status()` runs in the stdlib HTTP server thread. It attempted to call `_fsm.current_state()` via `run_coroutine_threadsafe()`. `ExecutionFSM.current_state()` is a pure DB call — it has no in-memory state. From a sync thread, the coroutine call is unreliable and races against the event loop's DB round-trip. No caching of last-known state meant UNKNOWN was returned whenever the call timed out.  
+**Fix:** Introduced `push_state(fsm_state, btc_spot, active_ticker)` — a sync function called from the async trading loop immediately after `await fsm.current_state()`. It writes three Python primitives to module-level vars. `_build_status()` reads those vars directly — zero coroutines, zero thread-safety issues, zero async calls from the HTTP thread. Feed health reads `FeedHealthMonitor.status_dict()` which uses only `time.time()` math — always safe from any thread.  
+**Commit:** `ad129b6`  
+**Pattern:** #sync-async-boundary  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULE:**  
+Never call async coroutines from a sync thread (HTTP handler, background thread) to read bot state. The pattern is: async loop calls `push_state()` after every `await fsm.current_state()`, HTTP thread reads the cached primitives. `FeedHealthMonitor.status_dict()` is sync-safe (pure time math). `ExecutionFSM.current_state()` is NEVER sync-safe — it always hits Supabase.
