@@ -238,3 +238,19 @@ When a bug is found in either repo:
 
 **AGENT NOTE — HARD RULE:**  
 Kalshi production REST base URL is `https://api.elections.kalshi.com/trade-api/v2`. Never use `trading-api.kalshi.com`. When a 401 persists after confirming signing is correct, check the base URL against the working implementation in `zerotrading-core/src/adapter/kalshi.ts`.
+
+---
+
+### CRASH-011 — `401 Unauthorized` — wrong message string in RSA-PSS signature
+**Date:** 2026-05-22 01:02 ET  
+**Found by:** Operator — confirmed via working implementation in `zerotrading-core/src/adapter/kalshi.ts`  
+**Severity:** crash  
+**Status:** fixed  
+**Symptom:** `401 Unauthorized` on all authenticated Kalshi REST calls after base URL fix (CRASH-010).  
+**Root cause:** `_sign()` built the signature message using just the short path. Kalshi requires the full path including `/trade-api/v2` prefix. Query string must be stripped before signing.  
+**Fix:** `message = (ts_ms + METHOD + "/trade-api/v2" + path.split("?")[0]).encode("utf-8")`  
+**Commit:** `3a25f69` (beta repo)  
+**Pattern:** #wrong-signature-message  
+
+**AGENT NOTE — HARD RULE:**  
+Kalshi signature message = `timestamp_ms + METHOD + /trade-api/v2 + path_without_query_string`. Cross-reference `zerotrading-core/src/adapter/kalshi.ts` for canonical signing logic.
