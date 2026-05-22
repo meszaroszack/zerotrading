@@ -254,3 +254,25 @@ Kalshi production REST base URL is `https://api.elections.kalshi.com/trade-api/v
 
 **AGENT NOTE — HARD RULE:**  
 Kalshi signature message = `timestamp_ms + METHOD + /trade-api/v2 + path_without_query_string`. Cross-reference `zerotrading-core/src/adapter/kalshi.ts` for canonical signing logic.
+
+---
+
+### CRASH-012 — Boot crash: wrong `series_ticker` param + `sys.exit(1)` on transient discovery failure
+**Date:** 2026-05-22 01:08 ET  
+**Found by:** Operator  
+**Severity:** crash  
+**Status:** fixed  
+**Symptom:** Bot crashes at boot either (a) returning no markets because `ticker=KXBTC` is the wrong param for series filtering, or (b) calling `sys.exit(1)` when Kalshi API is momentarily between windows.  
+**Root cause (two issues):**  
+1. `discover_active_kxbtc15m()` used `{"ticker": "KXBTC"}` — this is a market-level filter. The correct param for filtering by series is `{"series_ticker": "KXBTC15M"}`. Manual KXBTCD exclusion and `startswith("KXBTC-")` filters were only needed to compensate for the wrong param and are now removed.  
+2. Boot discovery failure called `sys.exit(1)` — a transient Kalshi blip (market between 15-min windows) would permanently kill the process. The correct behavior is to wait and retry.  
+**Fix:**  
+1. Changed `_get("/markets", params={"ticker": "KXBTC", ...})` to `params={"series_ticker": "KXBTC15M", ...}`. Removed manual ticker filters.  
+2. Wrapped boot discovery in `while True` / `await asyncio.sleep(60)` / `continue` instead of `sys.exit(1)`.  
+**Commit:** `8a091a5`  
+**Pattern:** #wrong-api-param, #fail-open-on-transient  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULES:**  
+- Kalshi series filter param is `series_ticker`, not `ticker`. Use `series_ticker=KXBTC15M` to get only 15-minute BTC markets.  
+- Never `sys.exit()` on a transient discovery failure at boot. KXBTC15M markets roll every 15 minutes — there is a brief window where no market is open. Always retry with sleep.
