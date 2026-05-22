@@ -194,3 +194,17 @@ When a bug is found in either repo:
 **Commit:** (next commit in zerotradingx15minbtc)  
 **Pattern:** #hardcoded-env-value  
 **Cross-repo:** Fix in zerotradingx15minbtc. Same entry in beta CRASH-AND-FIX-LOG.md.
+
+---
+
+### CRASH-008 — `401 Unauthorized` on Kalshi REST — API key environment mismatch
+**Date:** 2026-05-21 22:14 ET  
+**Repo:** zerotradingx15minbtc  
+**Found by:** Operator (Railway deploy logs)  
+**Severity:** crash  
+**Status:** diagnosed  
+**Symptom:** `401 Unauthorized` on `trading-api.kalshi.com/trade-api/v2/portfolio/positions` at boot reconciliation.  
+**Root cause:** Demo API key used against production endpoint. Kalshi demo and production keys are completely separate.  
+**Fix:** Create a production API key on kalshi.com → Settings → API Keys → Production tab. Update Railway env vars.  
+**Pattern:** #paper-live-boundary-confusion  
+**Cross-repo:** Fix in zerotradingx15minbtc env config (no code change needed).
