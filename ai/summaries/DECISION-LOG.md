@@ -447,3 +447,37 @@ Every prior build suffered from the same two fatal flaws (no persistence, no rec
 - research/adapted/probablyprofit-order-management.md (NEW)
 - ai/guardrails/PERSISTENCE-RECONCILIATION.md (UPDATED: Rules 5-6)
 - ai/handoffs/CURRENT-STATE.md (UPDATED)
+
+---
+
+## 2026-05-21 20:00 ET — Beta repo zerotradingx15minbtc initialized
+
+**Author:** Perplexity Computer (Comet) on behalf of meszaroszack
+**Session:** beta repo `ai/summaries/2026-05-21-2000-init-scaffold.md`
+**Status:** decided
+**Scope:** architecture | docs | governance
+
+### Context
+
+The zerotradingx15minbtc repo existed but was completely empty. Session objective was to build the complete documentation baseline for the beta product before any implementation code, inheriting the right patterns from this parent repo.
+
+### Decision
+
+Initialized the full Phase 0 documentation scaffold in zerotradingx15minbtc. 31 files. Documentation-first baseline complete. Inheritance model explicitly defined: beta inherits from this parent repo and contributes learnings back upstream.
+
+### Rationale
+
+Documentation-first ensures any agent reading the beta repo can understand what to build, why, and under what constraints — without reading chat history. This repo's guardrails, strategy spec, architecture principles, and AI governance patterns are the authoritative sources. The beta builds on them, not around them.
+
+### Consequences
+
+- Beta Phase 0 complete. Phase 1 (Python skeleton) is the next step.
+- Beta has its own DECISION-LOG, CURRENT-STATE, session summaries, guardrails, and checklists.
+- Cross-repo update protocol is established: end of every beta session includes a cross-repo update check.
+- When beta generates architecture lessons or strategy findings, they are ported back here.
+
+### Related files
+
+- [beta repo README](https://github.com/meszaroszack/zerotradingx15minbtc/blob/main/README.md)
+- [beta docs/CURRENT-STATE.md](https://github.com/meszaroszack/zerotradingx15minbtc/blob/main/docs/CURRENT-STATE.md)
+- [beta docs/NEXT-STEPS.md](https://github.com/meszaroszack/zerotradingx15minbtc/blob/main/docs/NEXT-STEPS.md)

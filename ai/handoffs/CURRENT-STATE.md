@@ -1,8 +1,16 @@
 # CURRENT STATE
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
-**Last updated:** 2026-05-21 ~19:00 ET
-**Updated by:** Comet (browser agent) on behalf of meszaroszack
+**Last updated:** 2026-05-21 ~20:00 ET
+**Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack
+
+## Beta Repo Status (NEW)
+
+[meszaroszack/zerotradingx15minbtc](https://github.com/meszaroszack/zerotradingx15minbtc) is initialized.
+- **Phase 0 (documentation scaffold): COMPLETE** — 31 files, full baseline.
+- **Phase 1 (Python skeleton): NOT STARTED**
+- See beta repo `docs/CURRENT-STATE.md` and `docs/NEXT-STEPS.md` for current beta state.
+- Cross-repo inheritance model: beta inherits from this repo; learnings flow back here.
 
 ## CRITICAL: Know your market before doing ANYTHING
 
