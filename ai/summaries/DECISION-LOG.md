@@ -586,3 +586,42 @@ Major stabilization session for ZeroTrading Core (KXBTCD live system). Eleven bu
 - zerotrading-core `ai/summaries/DECISION-LOG.md` — full per-decision rationale
 - zerotrading-core `ai/summaries/2026-05-21-2133-core-stabilization-session.md` — session summary
 - zerotrading-core `ai/handoffs/CURRENT-STATE.md` — live state pointer
+
+---
+
+## 2026-05-23 00:55 ET - Core stabilization v1 reconciliation; introduce branch-and-merge discipline
+
+**Author:** Perplexity Computer (Comet) on behalf of meszaroszack
+**Session:** `ai/summaries/2026-05-23-0055-core-stabilization-reconcile.md`
+**Status:** decided
+**Scope:** ops, docs, architecture
+
+### Context
+Two independent fix efforts had been running in parallel on `zerotrading-core`. One agent worked off `core-engine-review-v1` and pushed PR #1 against `main` after about 10 hours of work. Meanwhile, the operator (and/or a parallel agent) had pushed 18 commits directly to `main`, including `7ea6400` "full-functional-repair: all 9 bugs fixed, 30 tests passing", which independently solved a subset of the same bugs the PR #1 author was fixing. The PR was not mergeable. Some changes contradicted each other (e.g., PR #1 patched the time-based exit's `Infinity` fallback; `main` had *removed* time-based exits entirely in `be99ad2`).
+
+The root cause was that the PR #1 author skipped the MASTER-PROMPT startup steps — never read `CURRENT-STATE.md`, never fetched `origin/main`, never listed open PRs. The MASTER-PROMPT already required all of this; nothing enforced it.
+
+### Decision
+1. **Reconcile by rebasing onto `main`.** Keep all of main's work; cherry-pick only the non-overlapping value from PR #1 (BUG-3 urgent exit instrumentation, BUG-4 crash/health, BUG-5 STATE_DIR + Railway docs, BUG-6 balance cache, UI-2 sparkline). Drop PR #1's BUG-1 (main has a different settlement architecture), BUG-2 (main removed the feature being patched), UI-1 (main writes outcome to PositionRecord, not via ledger join).
+2. **Merge as PR #2 (`reconcile/core-stabilization-v1` → `main`).** Close PR #1 unmerged.
+3. **Author `ai/guardrails/BRANCH-AND-MERGE-DISCIPLINE.md`** with the exact startup and end-of-session checklists, the "branch from `origin/main`, never from a named feature branch" rule, and a worked example of the incident.
+4. **Author `AGENTS.md` at the parent repo root** so every AI tool (Cursor, Claude Code, Copilot, Codex, Perplexity Computer, etc.) sees the seven hard rules without being told.
+5. **Author `ai/checklists/SESSION-STARTUP-CHECKLIST.md`** with a copy-paste shell block for the 60-second startup audit.
+6. **Schedule branch-protection setup on `zerotrading-core`** (require PR, require CI green, require linear history) — operator action, tracked in CURRENT-STATE open items.
+
+### Rationale
+The MASTER-PROMPT contains the right rules but is long-form prose. Agents skim or skip it on busy sessions. A 60-second copy-paste startup block and a 7-bullet `AGENTS.md` are easier to comply with and harder to plausibly skip. Branch protection on `main` would have caught the PR #1 issue at the GitHub layer before it required reconciliation. Long-lived named feature branches (like `core-engine-review-v1`) are the attractive nuisance that caused this — the rule "branch from `origin/main`, never a named feature branch" eliminates the failure mode at the source.
+
+### Consequences
+- Future agents must run the startup checklist before writing code. Failure to do so is now explicitly documented as a regression cause, with a worked example.
+- `main` is the only legitimate branch source for new work. Other feature branches must be deleted within a week of merging.
+- The operator will turn on branch protection on `zerotrading-core` (require PR review, require CI green). This is the next-action item in CURRENT-STATE.
+- The reconciled PR #2 brings BUG-3/4/5/6 + UI-2 + eslint scaffold to `main` with 68/68 tests passing. Railway redeploys from `main` automatically.
+
+### Related files
+- `ai/guardrails/BRANCH-AND-MERGE-DISCIPLINE.md` (new)
+- `AGENTS.md` (new — parent repo root)
+- `ai/checklists/SESSION-STARTUP-CHECKLIST.md` (new)
+- `ai/summaries/CRASH-AND-FIX-LOG.md` (new section: CORE-STABILIZATION-V1-RECONCILE)
+- `ai/handoffs/CURRENT-STATE.md` (refreshed)
+- `zerotrading-core` PRs #1 (closed unmerged) and #2 (merged as `694f4df`)

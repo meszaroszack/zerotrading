@@ -388,3 +388,44 @@ Every `await rest.*()` call in boot_reconcile and anywhere in the boot sequence 
 - Source branch = `main`
 
 **Pattern:** #event-coverage, #ledger-join, #crash-artifacts, #persistence-contract, #cache-with-staleness, #ring-buffer
+
+---
+
+### CORE-STABILIZATION-V1-RECONCILE — Branch divergence: agent worked off a stale base
+**Date:** 2026-05-23 04:57 ET
+**Repo:** github.com/meszaroszack/zerotrading-core (process bug; affects governance for all repos)
+**Found by:** Perplexity Computer — discovered when attempting `gh pr merge 1` returned "not mergeable" due to conflicts
+**Severity:** silent-wrong (process) — could have shipped duplicated/conflicting fixes and lost 18 commits of work on main
+**Status:** fixed (reconciled via cherry-pick onto main; merged as `694f4df`)
+
+**Symptom:**
+- PR #1 (`fix/core-stabilization-v1`) was based on `core-engine-review-v1`, a named feature branch that was 18 commits behind `origin/main`.
+- `main` had independently received `7ea6400` "full-functional-repair: all 9 bugs fixed, 30 tests" which solved an overlapping set of bugs (BUG-1 settlement P&L, BUG-2 time-exit) using a different architecture (e.g., main removed time-exit entirely in `be99ad2`; agent's PR fixed time-exit fallback).
+- Direct merge of PR #1 would either A) overwrite main's superior fixes, or B) double-implement the same logic with conflicting contracts (PositionRecord vs ledger-join for tradeHistory; settlement watcher vs `GET /markets/{ticker}` polling).
+
+**Root cause:**
+- Agent skipped the **MASTER-PROMPT v2 startup sequence**: did not run `git fetch && git log origin/main..HEAD` to verify branch base, did not read `ai/handoffs/CURRENT-STATE.md` which clearly stated `Latest commit: f4b7bdc` and "Time-exit intentionally removed — do not re-add".
+- Agent branched off whatever was checked out locally (`core-engine-review-v1`) without confirming it was current with `origin/main`.
+- MASTER-PROMPT required these steps but had no machine-readable enforcement — no AGENTS.md, no startup-checklist file, no PR template, no branch-protection rule requiring up-to-date-with-base.
+- No drift guardrail caught the 18-commit gap before code was written.
+
+**Fix:**
+1. **Code reconciliation** — Created `reconcile/core-stabilization-v1` off `origin/main`, cherry-picked only the bug fixes that are still relevant on main (BUG-3 side-aware urgent exit, BUG-4 crash artifact + health.json, BUG-5 STATE_DIR + Railway volume, BUG-6 balance cache, UI-2 bidSeries sparkline, plus eslint scaffold). Dropped BUG-1, BUG-2, UI-1 — main already solved them or solved them differently. Hand-resolved every conflict (UI-2 kept main's PositionRecord tradeHistory and only added the `bidSeries` line; BUG-3 dropped `timeExitTriggered` references since main removed time-exit entirely). Validated `typecheck` clean, 68/68 tests passing, lint 0 errors. Closed PR #1, opened PR #2, merged as `694f4df`. Railway auto-redeploys from main.
+2. **Process guardrails** — Added three required-reading documents in parent repo:
+   - `AGENTS.md` (root) — auto-read by Cursor/Claude Code/Copilot/Codex/Perplexity. Seven hard rules incl. "branch from `origin/main` — never a named feature branch", "main must always be deployable", "no force-push on shared branches", "fast-forward or rebase before opening PR".
+   - `ai/guardrails/BRANCH-AND-MERGE-DISCIPLINE.md` — required-reading guardrail with the worked-example reconstruction of this incident.
+   - `ai/checklists/SESSION-STARTUP-CHECKLIST.md` — 60-second copy-paste shell block (`git fetch && git status && git log --oneline -10 origin/main..HEAD && gh pr list && read CURRENT-STATE.md`) plus the four questions every agent must answer before writing any code.
+
+**Operator follow-ups required (cannot be done via API):**
+- Enable branch protection on `zerotrading-core` and `zerotrading` `main` branches: require PR review, require linear history (rebase or squash only), require status checks (typecheck + tests + lint) green, require branch to be up-to-date before merge.
+- Delete stale branches: `core-engine-review-v1`, `fix/core-stabilization-v1`, `reconcile/core-stabilization-v1` (kept locally for archaeology, removable once team confirms).
+
+**Pattern:** #stale-base, #missing-startup-discipline, #governance-not-enforced
+**Cross-repo:** This is a process bug, not a code bug. Applies to ALL ZeroTrading repos (parent, core, x15minbtc) and to any future repo that ships under the same AI-first contract.
+
+**AGENT NOTE — HARD RULE:**
+Before writing a single line of code in any ZeroTrading repo:
+1. `cd <repo> && git fetch origin && git status && git log --oneline -10 origin/main..HEAD`
+2. If `HEAD` is not on `origin/main` or is behind, STOP. Either rebase onto `origin/main` or branch fresh from `origin/main`. Never branch off a named feature branch.
+3. Read `ai/handoffs/CURRENT-STATE.md`. Confirm `Latest commit:` matches `git log -1 origin/main --format=%h`. If it does not, ask the operator before doing anything else.
+4. `gh pr list --state open` — check for in-flight work that overlaps your task.

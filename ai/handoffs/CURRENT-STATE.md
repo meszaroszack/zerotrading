@@ -2,9 +2,23 @@
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
 
-**Last updated:** 2026-05-21 21:33 ET  
-**Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack  
-**Reason for update:** End of session — ZeroTrading Core stabilization (11 bug fixes) + governance integration into zerotrading-core
+**Last updated:** 2026-05-23 01:00 ET
+**Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack
+**Reason for update:** End of session — Core stabilization v1 reconciled and merged to main (`694f4df`); governance pack (AGENTS.md + branch discipline guardrail + session-startup checklist) added to parent repo.
+
+---
+
+## CRITICAL: Required reading for every new agent / new session
+
+Read in this order before touching any code:
+
+1. `AGENTS.md` (repo root) — seven hard rules, repository map, end-of-session checklist.
+2. `ai/checklists/SESSION-STARTUP-CHECKLIST.md` — 60-second shell block + four pre-flight questions.
+3. `ai/guardrails/BRANCH-AND-MERGE-DISCIPLINE.md` — branch/merge contract and worked-example incident from 2026-05-23.
+4. `ai/guardrails/PERSISTENCE-RECONCILIATION.md` — persistence contract.
+5. `ai/guardrails/KALSHI-MARKET-REFERENCE.md` — market structure (KXBTCD vs KXBTC15M).
+6. This file.
+7. `ai/summaries/CRASH-AND-FIX-LOG.md` — every bug ever shipped, with hard rules.
 
 ---
 
@@ -27,24 +41,27 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 
 - **Deployed at:** `zerotrading-core-production.up.railway.app`
 - **Mode:** LIVE (real money)
-- **Last known balance:** ~$26.42 (as of 2026-05-21 ~21:06 ET)
-- **Cycles this session:** 3+ completed (2 wins, 1 loss per operator)
-- **Latest commit:** `f4b7bdc` — "fix: fill price field names, re-entry guard, exit P&L reporting"
-- **Build status:** Passing (TypeScript clean)
-- **Governance:** `ai/` scaffold, `.cursor/rules/`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `README.md` now all present in zerotrading-core
+- **Latest commit on main:** `694f4df` — "Merge PR #2: core stabilization v1 reconcile (BUG-3/4/5/6 + UI-2 + eslint scaffold)"
+- **Build status:** typecheck clean, 68/68 tests passing across 5 files, lint 0 errors / 11 pre-existing warnings
+- **Governance:** `ai/` scaffold, `.cursor/rules/`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `README.md`, eslint scaffold (`.eslintrc.cjs`, `.eslintignore`, `tsconfig.eslint.json`)
+- **Railway service config (set via dashboard):** `STATE_DIR=/data`, volume `zt-core-state` mounted at `/data`, source branch = `main`
 
 ### Do Not Regress (Core)
 - Settlement: `GET /markets/{ticker}` → `status==="finalized"` — positions endpoint dropped `settled` field Dec 2025
 - Fill prices: `no_price_dollars` / `yes_price_dollars` — not `price_dollars`
 - `position_fp`: Kalshi decimal string × 10000 normalized at adapter boundary
-- Time-exit intentionally removed — do not re-add
+- **Time-exit intentionally removed — do not re-add** (main removed it in `be99ad2`)
 - Re-entry guard: 60-min cooldown per ticker (`_lastCompletedTicker`)
 - `positionStore.create()` via `ACCT_OPEN_POSITION` effect — not inline in FSM
+- tradeHistory: PositionRecord-outcome-only mapping (do not re-introduce ledger-join — main owns this contract)
+- bidSeries: persisted ring buffer at `STATE_DIR/bid-series.json`, capacity 600, sampled only in ENTERING/OPEN/EXITING
 
 ### Open Items (Core)
-- Orphaned Kalshi positions from pre-fix-6 bugs require manual review on Kalshi dashboard
-- No automated test harness exists — Phase 2 item
-- Exit P&L fields not yet verified in live cycle (fix #11 — verify in next cycle)
+- **OPERATOR ACTION REQUIRED — Branch protection on `meszaroszack/zerotrading-core`:** require PR review, require linear history (rebase or squash), require status checks green, require branch up-to-date with base before merge. Without this, the 2026-05-23 branch-divergence incident can recur.
+- **OPERATOR ACTION REQUIRED — Same branch protection on `meszaroszack/zerotrading`** (parent).
+- **OPERATOR ACTION REQUIRED — Delete stale branches** on `zerotrading-core`: `core-engine-review-v1`, `fix/core-stabilization-v1`, `reconcile/core-stabilization-v1`.
+- Orphaned Kalshi positions from pre-fix-6 bugs require manual review on Kalshi dashboard.
+- Lint warnings (11) are all pre-existing unused-var noise — schedule a cleanup PR but they are not blocking.
 
 ---
 
@@ -54,18 +71,9 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| Phase 0 — Documentation scaffold | ✅ Complete | `74192c7` |
-| Phase 1 — Python skeleton | ✅ Complete | `d205ec4` |
-| Phase 2 — First paper run | ⏳ Not started | — |
-
-**Phase 1 delivered (2026-05-21 21:00 ET):**
-- 20 source files covering all 9 architectural layers
-- Kalshi REST + WS clients (async, RSA auth)
-- Binance 1m kline stream, feed health monitor
-- Supabase-backed FSM (5 states, duplicate-trade guard)
-- Black-Scholes terminal probability model, 7 skip gates
-- Paper mode with full simulation
-- Railway deploy config
+| Phase 0 — Documentation scaffold | Complete | `74192c7` |
+| Phase 1 — Python skeleton | Complete | `d205ec4` |
+| Phase 2 — First paper run | Not started | — |
 
 ### Before First Paper Run (Manual Steps Required)
 1. Apply `src/db/schema.sql` to Supabase
@@ -78,11 +86,12 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 
 ## Next Steps (in order)
 
-1. **Watch next Core live cycle** — verify exit P&L fields populate in dashboard after fix #11
-2. **Manually resolve orphaned Core positions** on Kalshi exchange
-3. **Apply schema + deploy 15M beta** — first paper run
-4. **Monitor 15M paper run** — check `decisions` table for skip reasons
-5. **Phase 2 (15M):** live order execution, macro gate, auto-ticker discovery, consecutive-loss cooldown
+1. **Operator: enable branch protection** on both `zerotrading-core` and `zerotrading` `main` branches.
+2. **Operator: delete stale branches** on `zerotrading-core`.
+3. **Watch next Core live cycle** — verify bidSeries sparkline renders and `health.json` updates.
+4. **Manually resolve orphaned Core positions** on Kalshi exchange.
+5. **Apply schema + deploy 15M beta** — first paper run.
+6. **Multi-repo governance pass** — operator has multiple repos (some production, some research-only). Need to decide which get full `ai/` scaffold and which get a lighter `AGENTS.md`-only instruction layer.
 
 ---
 
@@ -100,6 +109,7 @@ All prior build research is committed in `research/adapted/`. Key files:
 | `phase1-implementation-patterns.md` | Phase 1 design decisions (15M) |
 
 Guardrails in `ai/guardrails/`:
+- `BRANCH-AND-MERGE-DISCIPLINE.md` — branch/merge contract (REQUIRED, new 2026-05-23)
 - `PERSISTENCE-RECONCILIATION.md` — 6 rules, 10-question self-test (REQUIRED)
 - `KXBTC15M-MARKET-STRUCTURE.md` — 15M market structure rules (REQUIRED for 15M work)
 - `KALSHI-MARKET-REFERENCE.md` — API field mappings and fee schedule (REQUIRED)
