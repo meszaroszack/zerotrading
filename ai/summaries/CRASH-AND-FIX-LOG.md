@@ -359,3 +359,32 @@ Never call async coroutines from a sync thread (HTTP handler, background thread)
 
 **AGENT NOTE — HARD RULE:**  
 Every `await rest.*()` call in boot_reconcile and anywhere in the boot sequence must be wrapped in try/except. An unhandled httpx error before the trading loop starts will silently crash the process. The Railway restart loop symptom is: dashboard at /health 200, uptime resets every few minutes, fsm_state always UNKNOWN.
+
+---
+
+### CORE-STABILIZATION-V1 — zerotrading-core PR (BUG-1..BUG-6, UI-1, UI-2)
+**Date:** 2026-05-23 ET
+**Repo:** github.com/meszaroszack/zerotrading-core
+**Branch:** fix/core-stabilization-v1 (off core-engine-review-v1)
+**Severity:** mixed (1 minor + 6 major + 1 crash class)
+**Status:** PR open (not auto-merged per operator rule)
+**Cross-repo:** Full per-entry details live in `zerotrading-core/ai/summaries/CRASH-AND-FIX-LOG.md` (FIX-CORE-001..FIX-CORE-008).
+
+**Summary of fixes:**
+1. **BUG-1 / FIX-CORE-001 (`c2f4f33`)** — Settlement P&L now booked via new `MARKET_SETTLED` event + watcher + `ACCT_BOOK_SETTLEMENT_PNL` ledger effect. Realized P&L lives in the ledger layer (per the architecture correction); UI derives from join.
+2. **BUG-2 / FIX-CORE-002 (`c8c53bd`)** — Time-exit fallback no longer collapses to `Infinity` when `watchedMarket` is undefined. Eslint `no-restricted-syntax` rule blocks the regression.
+3. **BUG-3 / FIX-CORE-003 (`2d3091b`)** — Urgent exits now log structured `urgent_exit_*` lines, reprice side-aware against the contra side, and escalate to IOC after N failed reposts.
+4. **BUG-4 / FIX-CORE-004 (`531b48e`)** — Crash artifact (`crash.json`) + transient error filter (ECONNRESET/ETIMEDOUT/EAI_AGAIN/ENOTFOUND/ECONNREFUSED/EPIPE/kalshi_rate_limited) + periodic `health.json` writer + `no-floating-promises` audit.
+5. **BUG-5 / FIX-CORE-005 (`ebff8ad`)** — `STATE_DIR` env wired through all file persistence; `railway.json` declares `zt-core-state` volume at `/data`; `docs/RAILWAY-DEPLOY.md` and `docs/TODO-SUPABASE-MIGRATION.md` added.
+6. **BUG-6 / FIX-CORE-006 (`2c3e910`)** — `/api/status.balance` served from a TTL cache (8s) with 5s background refresh and stale-on-error. 50 reads → 1 fetcher call.
+7. **UI-1 / FIX-CORE-007 (`140acb1`)** — `/api/status.tradeHistory` now joins positions ⨝ ledger by `cycleId/ticker` (Invariant I-15: confirmed overrides estimated). Adds `exitMode='settled_hold'` for closed-by-resolve cycles. KPI summary: cyclesWon / cyclesLost / cyclesHeld / totalNetPnlCents / totalFeesCents / todayNetPnlCents / winRate.
+8. **UI-2 / FIX-CORE-008 (`bd24cdb`)** — Bid/ask + BTC spot ring buffer (capacity 600, persisted to `STATE_DIR/bid-series.json`, sampler state-guarded on ENTERING/OPEN/EXITING). Dashboard sparkline renders NO bid (green), NO ask (red), BTC spot (dashed gray).
+
+**Acceptance:** typecheck clean, 54/54 tests pass across 7 files, lint reports 0 errors and 4 pre-existing unused-var warnings. Strategy thresholds, regime weights, and sizing were **not** changed (operator constraint).
+
+**Railway service config (operator action required, not changed via API):**
+- `STATE_DIR=/data`
+- Volume `zt-core-state` mounted at `/data`
+- Source branch = `main`
+
+**Pattern:** #event-coverage, #ledger-join, #crash-artifacts, #persistence-contract, #cache-with-staleness, #ring-buffer
