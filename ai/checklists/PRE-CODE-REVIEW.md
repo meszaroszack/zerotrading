@@ -42,7 +42,25 @@
 - [ ] Unfilled orders cancelled within reasonable time
 - [ ] Balance floor respected (stop trading below minimum)
 
-## 6. Strategy Alignment
+## 6. Market Data Resilience (BLOCKING) — added after FIX-CORE-010
+
+- [ ] No single-source gate that early-returns when `getOrderbook()`/equivalent returns `null` or empty
+- [ ] If REST orderbook is the primary source, there is a documented fallback (summary, WS state, or stamped invariant) for every consumer
+- [ ] TP/SL and other exit triggers continue to fire when the primary source is degraded
+- [ ] UI display fields are NOT coupled to the same nullable object that drives decision logic (see `derivePositionUiFields` pattern in `zerotrading-core`)
+- [ ] Fallback usage emits an audit signal (e.g. `orderbookFromFallback: true`) so chronic degradation is observable
+- [ ] PR tests cover all four cases: both sources fresh; primary down + fallback usable; both down + market closed; both down + market open
+- [ ] Same anti-pattern audited in every sibling repo that talks to the same broker before PR is closed
+- [ ] See `ai/guardrails/MARKET-DATA-RESILIENCE.md`
+
+## 7. Validation Coverage (BLOCKING) — added after FIX-CORE-009
+
+- [ ] Every `tsconfig*.json` in the repo is invoked by the root `typecheck` script (run `find . -name "tsconfig*.json" -not -path "*/node_modules/*"` to enumerate)
+- [ ] For React/Vite projects: `tsc --noEmit -p client/tsconfig.json` is run; production `vite build` is NOT a substitute (it does not catch ReferenceErrors inside JSX template interpolations)
+- [ ] Tests cover failure paths, not just happy paths (null inputs, transient errors, empty collections)
+- [ ] If a UI is shipped, a smoke test boots the served bundle and asserts the React root has children + no console errors
+
+## 8. Strategy Alignment
 
 - [ ] Strategy matches `docs/STRATEGY-KXBTC15M.md` or `docs/STRATEGY-BTC-HOURLY.md`
 - [ ] Entry/exit rules match documented spec
@@ -51,6 +69,7 @@
 ## References
 
 - `ai/guardrails/PERSISTENCE-RECONCILIATION.md` (detailed rules + error history)
+- `ai/guardrails/MARKET-DATA-RESILIENCE.md` (FIX-CORE-010 origin; orderbook/REST fallback rules)
 - `ai/guardrails/KXBTC15M-MARKET-STRUCTURE.md` (market structure)
 - `docs/STRATEGY-KXBTC15M.md` (strategy spec)
 - `docs/pdfs/zerotrading-core-execution-statemachine.pdf` (FSM design)

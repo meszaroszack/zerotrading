@@ -29,3 +29,7 @@ All production deployments use Railway. All persistence and analytics use Supaba
 ## 7. Wikipedia Model
 
 This platform should eventually be the Wikipedia of prediction market research: open, inspectable, improvable by the community, with no important files missing.
+
+## 8. Pattern Propagation Across Sibling Repos
+
+When a correct pattern is established in one repo (e.g. orderbook-fallback synthesis, WS+REST refresher, entry-time invariant stamping), it must be audited and propagated across every other repo that integrates the same broker or solves the same problem. FIX-CORE-010 (2026-05-23) is the cautionary tale: the correct pattern existed in two sibling repos (`kalshi-btcd-trader`, `kalshi-15m-bot`) and even in the same file as the bug (`scoreCandidate` had the fallback; `computeExitPosture` did not), but was never propagated. Before closing any session that introduces or modifies a market-data, broker, or persistence pattern, run a cross-repo grep for the anti-pattern. See `ai/guardrails/MARKET-DATA-RESILIENCE.md` for the canonical example.

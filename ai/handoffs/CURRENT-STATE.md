@@ -16,9 +16,10 @@ Read in this order before touching any code:
 2. `ai/checklists/SESSION-STARTUP-CHECKLIST.md` — 60-second shell block + four pre-flight questions.
 3. `ai/guardrails/BRANCH-AND-MERGE-DISCIPLINE.md` — branch/merge contract and worked-example incident from 2026-05-23.
 4. `ai/guardrails/PERSISTENCE-RECONCILIATION.md` — persistence contract.
-5. `ai/guardrails/KALSHI-MARKET-REFERENCE.md` — market structure (KXBTCD vs KXBTC15M).
-6. This file.
-7. `ai/summaries/CRASH-AND-FIX-LOG.md` — every bug ever shipped, with hard rules.
+5. `ai/guardrails/MARKET-DATA-RESILIENCE.md` — orderbook/REST fallback rules (FIX-CORE-010 origin). Required before touching any code that reads current price/bid/ask.
+6. `ai/guardrails/KALSHI-MARKET-REFERENCE.md` — market structure (KXBTCD vs KXBTC15M).
+7. This file.
+8. `ai/summaries/CRASH-AND-FIX-LOG.md` — every bug ever shipped, with hard rules.
 
 ---
 

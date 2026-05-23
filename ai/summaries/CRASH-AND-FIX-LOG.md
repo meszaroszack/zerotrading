@@ -139,6 +139,13 @@ Use these tags when writing new entries. Add new patterns as new failure modes e
 | `#missing-idempotency-key` | Order/record submitted without a dedup key, enabling duplicates on retry |
 | `#reconcile-skipped` | Boot proceeded without reconciliation; ghost/orphaned positions persisted |
 | `#hardcoded-env-value` | A value that should come from env was hardcoded in source |
+| `#single-source-coupling` | One nullable object is the only path to N downstream fields; when it fails, all N collapse together |
+| `#happy-path-only` | Code handles the happy case correctly but lacks a graceful path when an upstream dep returns null/empty/stale |
+| `#sibling-pattern-not-propagated` | A correct pattern existed in a sibling repo (or even the same file) but was never propagated to the buggy site |
+| `#invisible-trading-failure` | Trading logic silently skipped under a condition that no health probe or alert detects |
+| `#partial-checks` | A validation script (typecheck/lint/test) ran but did not cover all subtrees of the repo |
+| `#ts-not-enforced-in-jsx-interp` | Vite/React production build does not flag ReferenceError inside JSX template-string interpolations; only `tsc --noEmit` catches them |
+| `#ui-only-failure-invisible-to-health-probes` | Server-side health, API, and uptime all pass while the UI is broken |
 
 ---
 
