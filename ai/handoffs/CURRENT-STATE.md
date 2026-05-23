@@ -2,9 +2,9 @@
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
 
-**Last updated:** 2026-05-23 01:00 ET
+**Last updated:** 2026-05-23 01:30 ET
 **Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack
-**Reason for update:** End of session — Core stabilization v1 reconciled and merged to main (`694f4df`); governance pack (AGENTS.md + branch discipline guardrail + session-startup checklist) added to parent repo.
+**Reason for update:** Hotfix `06173c2` merged — dashboard was blank in production due to deleted helper functions left with intact call sites. Bot was trading fine; UI tree failed to mount. See CRASH-AND-FIX-LOG FIX-CORE-009.
 
 ---
 
@@ -41,8 +41,8 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 
 - **Deployed at:** `zerotrading-core-production.up.railway.app`
 - **Mode:** LIVE (real money)
-- **Latest commit on main:** `694f4df` — "Merge PR #2: core stabilization v1 reconcile (BUG-3/4/5/6 + UI-2 + eslint scaffold)"
-- **Build status:** typecheck clean, 68/68 tests passing across 5 files, lint 0 errors / 11 pre-existing warnings
+- **Latest commit on main:** `06173c2` — "fix(ui): restore posBadgeColor + renderExitPosture (dashboard not rendering)"
+- **Build status:** server typecheck clean, **client typecheck clean** (now also checked manually), 68/68 tests passing across 5 files, lint 0 errors / 11 pre-existing warnings, client `vite build` produces `index-DmnMsiKw.js`
 - **Governance:** `ai/` scaffold, `.cursor/rules/`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `README.md`, eslint scaffold (`.eslintrc.cjs`, `.eslintignore`, `tsconfig.eslint.json`)
 - **Railway service config (set via dashboard):** `STATE_DIR=/data`, volume `zt-core-state` mounted at `/data`, source branch = `main`
 
@@ -57,6 +57,8 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 - bidSeries: persisted ring buffer at `STATE_DIR/bid-series.json`, capacity 600, sampled only in ENTERING/OPEN/EXITING
 
 ### Open Items (Core)
+- **TECH DEBT — Root `npm run typecheck` only invokes server `tsc`.** The client lives under `client/tsconfig.json` and was never wired in. This is exactly why FIX-CORE-009 reached production (dashboard blank). Next PR: change root `typecheck` script to run `tsc --noEmit && tsc --noEmit -p client/tsconfig.json`.
+- **TECH DEBT — No UI smoke test.** Add a minimal headless-browser test that loads the served bundle and asserts `document.getElementById('root').children.length > 0` and console has no errors. Would have caught FIX-CORE-009 immediately.
 - **OPERATOR ACTION REQUIRED — Branch protection on `meszaroszack/zerotrading-core`:** require PR review, require linear history (rebase or squash), require status checks green, require branch up-to-date with base before merge. Without this, the 2026-05-23 branch-divergence incident can recur.
 - **OPERATOR ACTION REQUIRED — Same branch protection on `meszaroszack/zerotrading`** (parent).
 - **OPERATOR ACTION REQUIRED — Delete stale branches** on `zerotrading-core`: `core-engine-review-v1`, `fix/core-stabilization-v1`, `reconcile/core-stabilization-v1`.

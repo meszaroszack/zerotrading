@@ -429,3 +429,38 @@ Before writing a single line of code in any ZeroTrading repo:
 2. If `HEAD` is not on `origin/main` or is behind, STOP. Either rebase onto `origin/main` or branch fresh from `origin/main`. Never branch off a named feature branch.
 3. Read `ai/handoffs/CURRENT-STATE.md`. Confirm `Latest commit:` matches `git log -1 origin/main --format=%h`. If it does not, ask the operator before doing anything else.
 4. `gh pr list --state open` — check for in-flight work that overlaps your task.
+
+---
+
+### FIX-CORE-009 — Dashboard blank in production: ReferenceError: posBadgeColor is not defined
+**Date:** 2026-05-23 01:30 ET
+**Repo:** github.com/meszaroszack/zerotrading-core
+**Found by:** Operator (screenshot of blank dashboard at https://zerotrading-core-production.up.railway.app); confirmed in headless browser by Perplexity Computer
+**Severity:** silent-wrong (UI completely blank; bot continues trading correctly server-side, so failure is invisible from API/health checks)
+**Status:** fixed (PR #3 squash-merged as `06173c2`; Railway auto-redeployed; verified live — 9 cards rendering, zero JS errors)
+
+**Symptom:**
+- Dashboard URL loaded: HTML 200, CSS 200, JS bundle 200, `/api/status` returned full 47kB JSON payload showing position OPEN, 2 contracts, uptime ~29min.
+- Page rendered as solid dark background — React root `<div id="root">` had zero child nodes.
+- Console error at first render: `ReferenceError: posBadgeColor is not defined`. Whole React tree failed to mount.
+
+**Root cause:**
+- Commit `7ea6400` ("full-functional-repair: all 9 bugs fixed, 30 tests passing, zero TS errors") deleted both `function posBadgeColor(state)` and `function renderExitPosture(ep)` from `client/src/Dashboard.tsx` but left their call sites intact at lines 421 and 480.
+- The bundle still compiled because:
+  1. Root `npm run typecheck` script only invokes `tsc --noEmit` against the **server** `tsconfig.json`. The client lives under `client/tsconfig.json` and was never wired into the root script. `tsc -p client/tsconfig.json` does flag both errors — but it was never run in CI or in the pre-merge gate.
+  2. Vite production build does not enforce TypeScript reference resolution inside JSX template-string interpolations (`className={`badge ${posBadgeColor(state)}`}`). It emits the call into the bundle as-is and fails only at runtime.
+- The commit message claimed "zero TS errors" — which was true for the server tsconfig that was actually checked. The client tsconfig was never checked.
+
+**Fix:**
+1. Restored both helpers verbatim from their pre-`7ea6400` definitions, with doc comments pointing at this incident (`fix(ui): restore posBadgeColor + renderExitPosture`, merged as `06173c2`).
+2. Validation gates that should be added (separate PR, tracked in CURRENT-STATE follow-ups):
+   - Add `tsc -p client/tsconfig.json` to the root `typecheck` script so `npm run typecheck` covers both halves of the repo.
+   - Add a smoke test that boots the served bundle in a headless browser and asserts `document.getElementById('root').children.length > 0`.
+3. Branch protection (operator action, still pending) must require `typecheck` green before merge — currently only enforced by convention.
+
+**Commit:** `06173c2` (on `meszaroszack/zerotrading-core` main)
+**Pattern:** #partial-checks, #ts-not-enforced-in-jsx-interp, #ui-only-failure-invisible-to-health-probes
+**Cross-repo:** This entry. The child repo entry will appear in `zerotrading-core/ai/summaries/CRASH-AND-FIX-LOG.md` once that scaffold is created (separate session).
+
+**AGENT NOTE — HARD RULE:**
+"Typecheck passes" is only meaningful if the script actually checks every TypeScript subtree in the repo. Before claiming a build is green, run `find . -name "tsconfig*.json" -not -path "*/node_modules/*"` and confirm every config is invoked. For React/Vite projects specifically: prod build does NOT catch ReferenceErrors inside JSX template interpolations — only `tsc --noEmit` does. A passing build is not a passing typecheck.
