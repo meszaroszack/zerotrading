@@ -464,3 +464,51 @@ Before writing a single line of code in any ZeroTrading repo:
 
 **AGENT NOTE — HARD RULE:**
 "Typecheck passes" is only meaningful if the script actually checks every TypeScript subtree in the repo. Before claiming a build is green, run `find . -name "tsconfig*.json" -not -path "*/node_modules/*"` and confirm every config is invoked. For React/Vite projects specifically: prod build does NOT catch ReferenceErrors inside JSX template interpolations — only `tsc --noEmit` does. A passing build is not a passing typecheck.
+
+---
+
+### FIX-CORE-010 — Exit logic silently disabled + dashboard fields blank when orderbook REST returns null
+**Date:** 2026-05-23 13:50 ET
+**Repo:** github.com/meszaroszack/zerotrading-core
+**Found by:** Operator (watching live dashboard show `—` for avg entry, current bid, yes ask, unrealized P&L despite holding 2 contracts on `KXBTCD-26MAY2314-T75399.99`); root cause traced by Perplexity Computer.
+**Severity:** silent-wrong (exit logic functionally broken; dashboard misreports state; bot relied on hour-close settlement to rescue positions when REST orderbook was momentarily unavailable. Operator confirmed: "P&L math has never really worked.")
+**Status:** fixed (PR #4 squash-merged as `f809f18`; PR #5 squash-merged as `6e495cf`; Railway auto-redeployed; verified live — `bootedAtMs` advanced, `currentNoBidCents` rendering real data, `position.state: IDLE` after operator cleared Kalshi.)
+
+**Symptom:**
+- Right-hand side of dashboard rendered `—` for: avg entry price, current NO bid, YES ask, unrealized P&L per contract, unrealized P&L total.
+- `/api/status` payload confirmed `position.exitPosture: null` AND `position.avgEntryPriceCents: null` AND `position.currentNoBidCents: null` even though the bot had an open position with a fully resolved fill history (`tradeHistory.entryAvgPrice: "0.5800"`).
+- Less visible but more dangerous: `URGENT_EXIT_TICK` audit logs were missing for one or more strategy ticks per blip — meaning TP/SL trigger logic also never ran during the same window. The bot had no functional exit path during a REST blip; only settlement at hour-close rescued the position. Operator confirmed this behavior has been present "in every build of this model."
+
+**Root cause:**
+- `src/strategy/endOfHour.ts` `handleOpen()` line 605 early-returned whenever `adapter.getOrderbook(ticker)` returned `null` OR `orderbook.noBid <= 0`. On early-return, `snap.exitPosture` stayed `null` for that tick.
+- `src/server/index.ts` line 259 built the API position object by reading ALL UI display fields from `snap.exitPosture?.X ?? null`. Single source of truth → single point of failure. When the orderbook was momentarily unavailable, the entire right column collapsed.
+- TP/SL trigger logic at lines 726–729 lived **inside the same gated block** — so the same blip that blanked the UI also silently disabled exit logic. There was no second code path or fallback.
+- The same file's `scoreCandidate()` at line 816 ALREADY implemented the correct fallback pattern: `(orderbook?.noBid || 0) > 0 ? orderbook!.noBid : market.no_bid_cents`. Entry-decision logic was robust; exit-decision logic was not. This inconsistency is the bug.
+- Reference repos in operator's GitHub account (`kalshi-btcd-trader/server/tradingEngine.ts:2383-2445`, `kalshi-15m-bot/src/feed/ws_feed.py:123`) all use a fallback or dual-source pattern for current price. The pattern was known internally but had not been propagated to `zerotrading-core`.
+
+**Fix:**
+Split into two PRs for blast-radius safety, both merged to main same session:
+
+1. **PR #4 (`f809f18`) — `fix(ui): show position fields when orderbook is unavailable`** (DISPLAY ONLY)
+   - Extracted exported pure helper `derivePositionUiFields()` in `src/server/index.ts`.
+   - Source priority for UI fields:
+     - `avgEntryPriceCents` ← `exitPosture`, else parse `activePos.entryAvgPrice` (the persisted fill-derived dollar string).
+     - `currentNoBidCents` ← `exitPosture`, else `snap.watchedMarket.noBidCents` (from `getCurrentHourMarkets`).
+     - `yesAskCents` ← `exitPosture`, else `snap.watchedMarket.yesAskCents`.
+     - `unrealizedPnl*` ← `exitPosture`, else computed inline from above.
+   - 7 colocated tests at `src/server/derivePositionUiFields.test.ts`.
+   - Does NOT change trading behavior.
+
+2. **PR #5 (`6e495cf`) — `fix(strategy): TP/SL fallback when orderbook REST returns null`** (TRADING BEHAVIOR)
+   - New exported helper `synthesizeOrderbookFromSummary(summary, fetchedAt)` builds a minimal `KalshiOrderbookView` from a `KalshiMarketSummary`'s top-of-book fields.
+   - `handleOpen()` restructured: market summaries fetched FIRST (was already fetched later, just moved up), THEN orderbook attempted, THEN fallback synthesized from summary if REST returned null/empty.
+   - New gate: enter the market-finalized reconcile branch ONLY when both sources are unusable (REST null AND summary status closed/settled OR `no_bid_cents == 0`). This preserves the correct hour-close settlement path.
+   - `URGENT_EXIT_TICK` audit log now includes `orderbookFromFallback: boolean` for operator visibility. Expected to be `false` in steady state; non-zero rate indicates REST instability worth investigating.
+   - 7 colocated tests in `src/strategy/endOfHour.test.ts` (file went 13 → 20 tests; total suite 68 → 82).
+
+**Commits:** `f809f18` (PR #4), `6e495cf` (PR #5)
+**Pattern:** #single-source-coupling, #happy-path-only, #invisible-trading-failure, #pattern-existed-in-sibling-not-propagated
+**Cross-repo:** Parent (this entry). Child `zerotrading-core/ai/` scaffold still pending — when created, this entry's body will be mirrored verbatim into `zerotrading-core/ai/summaries/CRASH-AND-FIX-LOG.md`.
+
+**AGENT NOTE — HARD RULE:**
+Any code path that reads "current price" or "current bid/ask" from a single live REST source is wrong by default. Always read from at least two sources (live + cached summary) and synthesize a fallback. The bar is: "if Kalshi REST returns 500 for 30 seconds, does TP/SL still fire?" If the answer is "we'd wait for the next tick," that is the bug. Also: when adding a new piece of decision logic that depends on market data, ALWAYS grep the same file for the word "orderbook" to confirm whether a fallback pattern already exists nearby — `scoreCandidate` had it for 6 weeks before this bug was found.

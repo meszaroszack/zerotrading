@@ -2,9 +2,9 @@
 
 _Live pointer file. Overwrite at end of every session. Append-only history lives in `ai/summaries/DECISION-LOG.md`._
 
-**Last updated:** 2026-05-23 01:30 ET
+**Last updated:** 2026-05-23 13:50 ET
 **Updated by:** Perplexity Computer (Comet) on behalf of meszaroszack
-**Reason for update:** Hotfix `06173c2` merged — dashboard was blank in production due to deleted helper functions left with intact call sites. Bot was trading fine; UI tree failed to mount. See CRASH-AND-FIX-LOG FIX-CORE-009.
+**Reason for update:** FIX-CORE-010 merged across two PRs (#4 `f809f18`, #5 `6e495cf`). The bot's exit logic was silently disabled whenever the Kalshi orderbook REST endpoint returned null — same gate that blanked the dashboard right-column also gated TP/SL. Reference patterns from `kalshi-btcd-trader` and `kalshi-15m-bot` confirmed the fix. Operator cleared Kalshi positions and bot is now IDLE on deployed `6e495cf` with balance $28.13. See CRASH-AND-FIX-LOG FIX-CORE-010.
 
 ---
 
@@ -41,8 +41,8 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 
 - **Deployed at:** `zerotrading-core-production.up.railway.app`
 - **Mode:** LIVE (real money)
-- **Latest commit on main:** `06173c2` — "fix(ui): restore posBadgeColor + renderExitPosture (dashboard not rendering)"
-- **Build status:** server typecheck clean, **client typecheck clean** (now also checked manually), 68/68 tests passing across 5 files, lint 0 errors / 11 pre-existing warnings, client `vite build` produces `index-DmnMsiKw.js`
+- **Latest commit on main:** `6e495cf` — "fix(strategy): TP/SL fallback when orderbook REST returns null (#5)" (FIX-CORE-010 PR 2/2). Prior: `f809f18` (#4) display-side fix.
+- **Build status:** server typecheck clean, **client typecheck clean** (manually verified), **82/82 tests passing** across 6 files (`endOfHour.test.ts` 13→20, new `derivePositionUiFields.test.ts` 7), lint 0 errors / 11 pre-existing warnings, `vite build` clean.
 - **Governance:** `ai/` scaffold, `.cursor/rules/`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `README.md`, eslint scaffold (`.eslintrc.cjs`, `.eslintignore`, `tsconfig.eslint.json`)
 - **Railway service config (set via dashboard):** `STATE_DIR=/data`, volume `zt-core-state` mounted at `/data`, source branch = `main`
 
@@ -55,10 +55,14 @@ This repo targets TWO different Kalshi BTC markets. They have DIFFERENT structur
 - `positionStore.create()` via `ACCT_OPEN_POSITION` effect — not inline in FSM
 - tradeHistory: PositionRecord-outcome-only mapping (do not re-introduce ledger-join — main owns this contract)
 - bidSeries: persisted ring buffer at `STATE_DIR/bid-series.json`, capacity 600, sampled only in ENTERING/OPEN/EXITING
+- **FIX-CORE-010: Position UI fields must read from multiple sources — not just `snap.exitPosture`.** Use the exported `derivePositionUiFields()` helper in `src/server/index.ts`. Do not refactor it back to a single-source read.
+- **FIX-CORE-010: `handleOpen()` must fetch market summaries BEFORE the orderbook gate** and synthesize a fallback book via `synthesizeOrderbookFromSummary()` when REST returns null. The market-finalized reconcile branch fires only when BOTH sources are unusable. Do not re-introduce the old single-gate early-return.
 
 ### Open Items (Core)
-- **TECH DEBT — Root `npm run typecheck` only invokes server `tsc`.** The client lives under `client/tsconfig.json` and was never wired in. This is exactly why FIX-CORE-009 reached production (dashboard blank). Next PR: change root `typecheck` script to run `tsc --noEmit && tsc --noEmit -p client/tsconfig.json`.
-- **TECH DEBT — No UI smoke test.** Add a minimal headless-browser test that loads the served bundle and asserts `document.getElementById('root').children.length > 0` and console has no errors. Would have caught FIX-CORE-009 immediately.
+- **TECH DEBT — Root `npm run typecheck` only invokes server `tsc`.** The client lives under `client/tsconfig.json` and was never wired in. Why FIX-CORE-009 reached production. Next PR: change root `typecheck` script to run `tsc --noEmit && tsc --noEmit -p client/tsconfig.json`. (Still open after FIX-CORE-010.)
+- **TECH DEBT — No UI smoke test.** Add a minimal headless-browser test that loads the served bundle and asserts `document.getElementById('root').children.length > 0` and console has no errors. Would have caught FIX-CORE-009 immediately. (Still open after FIX-CORE-010.)
+- **TECH DEBT — No integration test for `handleOpen()` exit path.** PR #5 added unit tests on `synthesizeOrderbookFromSummary()` but `handleOpen` itself remains untested. Adding a test harness that drives `handleOpen` through ENTERING/OPEN with mocked adapters would have caught FIX-CORE-010 years ago. Track when prioritized.
+- **TECH DEBT — Audit-log signal `orderbookFromFallback: true` is unmetered.** PR #5 added this flag to `URGENT_EXIT_TICK` events but nothing alerts on a non-zero rate. If REST instability becomes chronic the bot will silently run on summary-only data — functional, but operator should know. Wire to a counter and a /api/status surface.
 - **OPERATOR ACTION REQUIRED — Branch protection on `meszaroszack/zerotrading-core`:** require PR review, require linear history (rebase or squash), require status checks green, require branch up-to-date with base before merge. Without this, the 2026-05-23 branch-divergence incident can recur.
 - **OPERATOR ACTION REQUIRED — Same branch protection on `meszaroszack/zerotrading`** (parent).
 - **OPERATOR ACTION REQUIRED — Delete stale branches** on `zerotrading-core`: `core-engine-review-v1`, `fix/core-stabilization-v1`, `reconcile/core-stabilization-v1`.
