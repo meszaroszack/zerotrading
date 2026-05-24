@@ -764,3 +764,25 @@ BTC price feed for any bot running on Railway must use REST polling, never WebSo
 **AGENT NOTE:** Whenever a long-lived background WS/stream subscribes to a per-entity stream (per-ticker, per-symbol, per-channel), and the active entity can change at runtime, the rotation handler MUST notify the stream. Updating only the local "what's active now" variable is silent breakage. Two rules:
 1. Every WS client subscribed to a rotating entity MUST expose a `change_X(new)` method that resubscribes.
 2. Every rotation site MUST call it. Grep for the rotation log message — if no `change_*` / `subscribe` call follows it, the stream is orphaned.
+---
+
+## CRASH-031 — Dashboard JS killed by Python-interpreted newline + comment backticks inside triple-quoted HTML
+
+**When:** 2026-05-24 ~12:15 ET (operator reported "regressed slightly on the UI", image showed every dashboard field rendered as em-dashes despite valid `/api/status`)
+**Symptom:** Topbar (BTC, mode, uptime, FSM, ticker, prob widget, KPIs) all showed `—`. Status endpoint returned full valid JSON. Playwright headless: `PAGEERROR: Invalid or unexpected token`.
+**Diagnosis path (DIAGNOSE BEFORE ASKING RULE applied):** Pulled `/api/status` — confirmed JSON correct. Pulled `/` HTML — extracted inline `<script>` block and ran `node --check` on it. First failure at line 175 of served JS, inside `navigator.clipboard.writeText(lines.join('\n'))`. The `\n` was a *real* LF in the source, not the two characters `\\n`. Because the dashboard JS lives inside a Python `"""..."""` literal in `src/ops/dashboard.py`, Python interpreted the single backslash as an escape and emitted a literal newline into the JS, which broke the single-quoted string. After fixing that, a second `node --check` failure surfaced at line 279: `Unexpected identifier 'ob'` inside a `// More informative empty-book message. Server always returns an \`ob\`` comment. Bisecting found the *actual* parser breakpoint earlier: my own newly-added explanatory comment for the first fix contained the substring `` `\n` `` — backticks around a `\n` that Python again expanded to a real newline. That opened an unclosed template literal that spanned into following lines and made the later `\`ob\`` comment look like the close + a stray identifier.
+**Root cause:** Pattern — JavaScript embedded inside a Python triple-quoted string is invisibly transformed by Python string semantics. Any `\n`, `\t`, `\\`, `%` or backtick-wrapped content can change meaning between source and what the browser receives. This is the same family as the SHIPPED-BUT-DISCONNECTED widget bugs: visually plausible, no compile error in Python, silently broken at runtime.
+**Fix:**
+1. `src/ops/dashboard.py:1049` — `lines.join('\n')` → `lines.join('\\n')` so JS receives the two-char escape.
+2. Removed backticks and embedded escape sequences from the new explanatory `//` comment to prevent it from itself crossing a real newline.
+**Verification:**
+- `node --check` on rendered JS: passes
+- `new Function(code)` in Node (browser-equivalent parser): passes
+- Playwright headless against locally-served HTML: 0 `pageerror` events, init JS runs (`tb-uptime` counter increments)
+- Live deploy verified post-redeploy: topbar shows `BTC $76,610`, `mode PRODUCTION`, `uptime` ticking, `FSM IDLE`. 0 parser pageerrors. (A few residual `null setting textContent` errors for elements not on the page — non-blocking, tracked as future work.)
+**Commit:** `fe811d0` (PR #10, squash-merged)
+**Pattern:** #python-embedded-js-escape-collision, #shipped-but-disconnected, #comment-breaks-parser
+**Cross-repo:** Parent repo (`zerotrading`) crash log updated below — same entry.
+
+**AGENT NOTE:** Whenever JS lives inside a Python triple-quoted string, treat the following sequences as **landmines** and double-check them on every edit: `\n`, `\t`, `\r`, `\\`, `%s`/`%d`/`%(` (Python `%` formatting), backticks (template literals span newlines), and stray `{}` if `.format()` is in play. Tracked as **TD-001** in `ai/system/TECH-DEBT.md` — long-term fix is to extract the dashboard JS into its own `.js` file served as a static asset. **TD-002** tracks the regression-guard test (run `node --check` on rendered HTML in CI) which was explicitly skipped this session by operator decision in favor of getting to first live trade.
+
