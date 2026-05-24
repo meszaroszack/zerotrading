@@ -741,3 +741,26 @@ BTC price feed for any bot running on Railway must use REST polling, never WebSo
 **Pattern:** #liveness-vs-traffic, #sparse-market, #log-buffer-pollution  
 
 **AGENT NOTE:** Connection liveness ≠ message recency for thin-liquidity markets. Always derive the "is WS up" signal from the underlying transport's connection state, not from data callbacks. The heartbeat is the cheap, correct primitive. Also: anything reachable by the dashboard's `/api/status` runs at user-poll rate — never call a side-effecting function from inside the status builder. Status builders must be pure reads.
+
+---
+
+## CRASH-030 — Ticker rotation didn't resubscribe Kalshi WS, leaving orderbook null on every new 15-min window
+
+**When:** 2026-05-23 ~23:15 ET (immediately after PR #8 deploy, while operator was watching the new ⚡ Console page during a window rotation)
+**Symptom:** YES Probability widget showed `Waiting for orderbook data…` even though `kalshi_ws_healthy: true`. `/api/status` returned `orderbook: { yes_bid: null, yes_ask: null, no_bid: null, no_ask: null, yes_mid: null, ts: <recent> }`. Operator: "hey something is still broken here....."
+**Diagnosis path (DIAGNOSE BEFORE ASKING RULE applied):** Read `/api/status` directly — confirmed `orderbook` block IS in the response (so it's not a JS bug), but all prices are null. Read `log_tail`:
+- 03:13:32 — subscribed to `KXBTC15M-26MAY232315-15`, snapshot `yes_levels=220 no_levels=1` ✅
+- 03:15:00 — resnapshot `yes_levels=0 no_levels=0` (market settling)
+- 03:15:30 — `loop.ticker_rotated old=KXBTC15M-26MAY232315-15 new=KXBTC15M-26MAY232330-30`
+- **No `kalshi_ws.subscribe_sent` after rotation.**
+**Root cause:** `_paper_loop` rotation block in `main.py` (around the `loop.ticker_rotated` log) only updated the local `active_ticker` variable. It never told `kalshi_ws` anything. The WS was still subscribed to the now-settled prior ticker, so we received no snapshot / no deltas for the new active ticker. Local `_yes_bids` / `_no_bids` stayed empty → `_build_ob_snapshot` returned `OrderbookSnapshot(yes_bid=None, no_bid=None, ...)` → `_build_status` exposed all-null prices → widget showed the empty-book placeholder. Also: `shared.active_ticker` was not updated on rotation, so the dashboard's "active ticker" pill could lag a window.
+**Fix:**
+1. New method `KalshiWebSocketClient.change_market(new_ticker)` in `src/ingestion/kalshi_ws.py` — updates `self.market_ticker`, clears `_yes_bids` / `_no_bids` immediately (so stale prices don't bleed into the dashboard while reconnect happens), and closes the current WS. The existing `run()` reconnect loop dials a fresh WS, `_connect_and_listen` resets state on connect, and `_subscribe(ws)` sends a fresh subscribe using the new `self.market_ticker`. No new code path — reuses the proven reconnect mechanism. No-op when ticker is unchanged.
+2. `_paper_loop` rotation block in `main.py` now calls `await kalshi_ws.change_market(new_ticker)` after updating `active_ticker`, and also sets `shared.active_ticker = new_ticker` so the dashboard pill reflects rotation immediately. `kalshi_ws` is threaded through `_paper_loop`'s signature.
+3. Dashboard `updateProbWidget(ob)` JS now distinguishes "no orderbook field at all" (legacy "Waiting for orderbook data…") from "book is genuinely empty" (`ob.ts` present, all prices null → "Orderbook empty — no bids posted yet for this market"). Diagnostic clarity for empty markets at window open.
+**Verification:** `python3 -c "import main; import src.ingestion.kalshi_ws; import src.ops.dashboard"` clean. Live verification deferred to next deploy + next 15-min rotation.
+**Pattern:** #stateful-subscription-without-rotation-handler, #shared-state-not-updated-on-rotation, #ui-empty-message-too-generic
+
+**AGENT NOTE:** Whenever a long-lived background WS/stream subscribes to a per-entity stream (per-ticker, per-symbol, per-channel), and the active entity can change at runtime, the rotation handler MUST notify the stream. Updating only the local "what's active now" variable is silent breakage. Two rules:
+1. Every WS client subscribed to a rotating entity MUST expose a `change_X(new)` method that resubscribes.
+2. Every rotation site MUST call it. Grep for the rotation log message — if no `change_*` / `subscribe` call follows it, the stream is orphaned.
