@@ -648,3 +648,48 @@ NEVER parse anything from a Kalshi ticker string except the `series_ticker` pref
 **AGENT NOTE — HARD RULE:**  
 `APP_MODE` controls trader selection only. Sizing caps (`MAX_CONTRACTS_PER_TRADE`, `MAX_RISK_PER_TRADE_USD`) are the operational dial between `safe-live` and `production` — there is no separate code path. All live entries go through `LiveTrader.simulate_entry` (named for paper-compat), which transitions FSM to ENTERING **before** placing the order so a process crash between place and fill can be reconciled by `client_order_id`.
 
+
+### CRASH-023 — Binance WS geo-blocked from Railway US data centers (HTTP 451)
+**Date:** 2026-05-23 22:00 ET  
+**Found by:** Perplexity Computer (verifying /api/status after PR #3 merge)  
+**Severity:** blocker for live trading (no BTC spot feed → bot blocks on `feed_health.is_healthy()`)  
+**Status:** fixed (config-only, no code change)  
+**Symptom:** After PR #3 deploy, `kalshi_ws_healthy: true` ✅ but `binance_ws_healthy: false`. Railway logs showed Binance WS handshake returning HTTP 451 ("Unavailable For Legal Reasons").  
+**Root cause:** `wss://stream.binance.com:9443` is geo-blocked from US IP ranges (Railway US data centers). Binance operates a separate US-compliant endpoint at `stream.binance.us:9443` with identical schema.  
+**Fix:** Set `BINANCE_WS_URL=wss://stream.binance.us:9443/ws/btcusdt@kline_1m` in Railway env. `src/ingestion/binance_ws.py` already reads `BINANCE_WS_URL` env var — no code change needed.  
+**Verification:** After env var set + redeploy, `binance_ws_healthy` flips to `true`.  
+**Pattern:** #geo-block, #env-only-fix, #third-party-api-region  
+
+**AGENT NOTE:** Whenever a third-party endpoint returns HTTP 451 from US infrastructure, check for a `.us` regional variant before touching code. Don't proxy, don't VPN — use the compliant endpoint.
+
+### CRASH-024 — Dashboard window countdown shows 4160:06 (parser broken for new ticker format)
+**Date:** 2026-05-23 22:00 ET  
+**Found by:** operator (looking at dashboard after PR #3 deploy)  
+**Severity:** display-only (does not affect trading), but operator-blocking for monitoring  
+**Status:** fixed  
+**Symptom:** Dashboard countdown shows nonsense values (e.g. `4160:06`) for the active KXBTC15M ticker.  
+**Root cause:** Two compounding bugs in `src/ops/dashboard.py` JS `parseWindowClose`:
+1. **Wrong ticker format assumption.** Code expected `KXBTC-25MAY2112-T100000` (parts[1] = 9 chars: `DDMMMHHMM`). Real format is `KXBTC15M-<YY><MMM><DD><HHMM>-<index>` (parts[1] = 11 chars: `YYMMMDDHHMM`). Slicing the new string with old offsets produced garbage day/hour values.
+2. **Wrong timezone assumption.** Code treated parsed HHMM as UTC. Kalshi tickers embed **ET local time** (currently EDT, UTC-4). Even if format had been right, the resulting Date would be 4 hours off.  
+**Fix:**  
+1. `_build_status()` in `src/ops/dashboard.py` now computes `window_close_time` server-side from clock-aligned UTC 15-minute boundaries (xx:00, xx:15, xx:30, xx:45) and ships it in `/api/status` as an ISO UTC string.  
+2. Dashboard JS now prefers `d.window_close_time` and parses it directly with `new Date(iso)`.  
+3. Ticker fallback parser fixed for the new 11-char format AND treats HHMM as ET (UTC-4 offset for EDT). Used only if server field is missing.  
+**Pattern:** #format-drift, #timezone-bug, #server-authoritative-truth  
+
+**AGENT NOTE — HARD RULE:**  
+Never parse Kalshi market timestamps client-side. The ticker embeds ET local time; the REST `close_time` field is UTC. Always compute window timing server-side (`_compute_window_timing` in `main.py` or the clock-aligned UTC logic in `_build_status`) and ship UTC ISO to the browser. The browser only formats; it never converts.
+
+### CRASH-025 — Dashboard `log_tail` permanently empty (custom logger bypasses stdlib bridge)
+**Date:** 2026-05-23 22:00 ET  
+**Found by:** Perplexity Computer (verifying /api/status after PR #3 merge)  
+**Severity:** major — operator cannot diagnose without SSH-equivalent Railway log access  
+**Status:** fixed  
+**Symptom:** `/api/status` returns `log_tail: []` permanently, even though the bot is logging actively (BOOT, FEED, FSM events visible in Railway log console).  
+**Root cause:** `src/ops/health.py` attaches a `_LogBufferHandler` to the **root stdlib logger** and reads from its deque for the dashboard. But `src/ops/logging.py`'s `_emit()` writes JSON directly to `sys.stdout` via `sys.stdout.write(...)` — it never touches stdlib `logging`, so the buffer handler never sees anything.  
+**Fix:** Added a bridge in `src/ops/logging.py`:
+- `_stdlib_log = logging.getLogger("zerotrading")` with `propagate=True` (so root-attached handlers see it).
+- `_emit()` now mirrors every log line to `_stdlib_log.log(level, "event key=value ...")` after writing JSON to stdout. The Railway JSON stream is unchanged; the dashboard log tail now populates.  
+**Pattern:** #logging-bridge, #dual-sink, #observability  
+
+**AGENT NOTE:** When two logging systems coexist (custom JSON sink + stdlib for buffer/handlers), always bridge one to the other. The cheapest bridge is `logging.getLogger(<name>).log(...)` from inside the custom emit, with `propagate=True` so root handlers fire. Never duplicate stream output — the stdout JSON is the canonical line; the stdlib mirror is purely for in-process consumers.
