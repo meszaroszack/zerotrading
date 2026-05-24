@@ -786,3 +786,26 @@ BTC price feed for any bot running on Railway must use REST polling, never WebSo
 
 **AGENT NOTE:** Whenever JS lives inside a Python triple-quoted string, treat the following sequences as **landmines** and double-check them on every edit: `\n`, `\t`, `\r`, `\\`, `%s`/`%d`/`%(` (Python `%` formatting), backticks (template literals span newlines), and stray `{}` if `.format()` is in play. Tracked as **TD-001** in `ai/system/TECH-DEBT.md` — long-term fix is to extract the dashboard JS into its own `.js` file served as a static asset. **TD-002** tracks the regression-guard test (run `node --check` on rendered HTML in CI) which was explicitly skipped this session by operator decision in favor of getting to first live trade.
 
+
+---
+
+## CRASH-032 — Trade history wiped on every Railway redeploy; bot lost $12.23 invisible to dashboard
+
+**When:** 2026-05-24, first day of live trading. Operator reported: "had 10 bucks as max to trade so idk how it did 12 - not doing well on current trade either no history either".
+**Symptom 1 (visible to operator):** Kalshi UI showed real fills (21 YES @ avg 57.9¢ = $12.15 settled $0, plus 1 YES @ 8¢ open and heading to settle worthless). Dashboard `/api/status` reported `daily_trades=0`, `win_count=0`, `loss_count=0`, `current_position=None`, and `recent_positions` showed only abort records.
+**Symptom 2 (loss):** -$12.23 realized + unrealized, against an initial $17.28 bankroll. $5.04 remaining at time of pause.
+**Diagnosis path:** Pulled `/api/status` → confirmed dashboard says no trades. Cross-checked with operator's Kalshi UI screenshots → real trades existed. Grepped for the positions cache source → `src/ops/dashboard.py:_refresh_cache` reads from `LocalStore.table("positions")`. Read `src/db/supabase.py` → store writes to `Path("./data/store.json")`, a relative path inside the container. `railway.toml` comment confirms: *"DB persistence is a local JSON store ... ephemeral across Railway redeploys."* The redeploy at 12:36 ET (triggered by operator env-var update for live trading) zeroed the file. All trades that happened before that point became invisible to the dashboard.
+**Root cause:** Persistence path was a relative directory inside the container, not a mounted Railway volume. Code-level: `LocalStore.DEFAULT_PATH = Path("./data/store.json")` with no env override. Operational-level: no Railway volume mount existed for the worker service. The combination meant every deploy started fresh.
+**Why this hid even worse bugs:** Without persistent history we cannot answer essential audit questions: which sizing mode produced the 21-contract trade, what was the actual `yes_ask` at order-placement time vs decision time, whether the fill price came from a market order or a limit that walked the book, etc. **The persistence bug is upstream of all other debugging.**
+**Fix (PR #12):** `DEFAULT_PATH = Path(os.environ.get("DATA_DIR", "./data")) / "store.json"`. Added `railway.toml` instructions for mounting a volume at `/data` and setting `DATA_DIR=/data`. Added `store.init path=... positions_loaded=N` boot log so operator can verify on each restart.
+**Verification:** Local smoke test confirms DATA_DIR override resolves correctly. PR #12 open, NOT merged — awaiting operator review + Railway volume creation before merge.
+**Pattern:** #ephemeral-state-on-ephemeral-storage, #observability-gap-hid-other-bugs, #bug-that-prevents-debugging-other-bugs
+
+**Open questions (deferred for tomorrow's session):**
+1. **Sizing math:** How did 21 contracts get bought from a $17.28 balance with `MAX_RISK_PER_TRADE_USD=10`? Cap mode budget would be $7.28 → at 39¢ = 18 contracts max. Kelly at f*≈0.9 × 0.25 × $17 = $3.83 → 9-10 contracts. Neither produces 21. **Need persisted decision + position rows to verify.**
+2. **Execution slippage:** Order placed at limit 39¢ filled at avg 57.9¢. Either the orderbook moved between log and place, or there's a market-order path we haven't seen. **Need the actual `live.placing_order` and `live.filled` log entries.**
+3. **Crossed-book reading (TD-005):** Decision logs show `yes_bid=0.71, yes_ask=0.39` (impossible in healthy book). Strategy ate this and produced a fake 38% edge. **This is a money-losing bug, not cosmetic — promote TD-005 to a hard skip gate.**
+4. **Suspicious-edge sanity gate:** A 38% edge in a binary BTC market is implausible. Should skip with `NO_TRADE reason=SUSPICIOUSLY_HIGH_EDGE` when `edge > 0.20`.
+
+**AGENT NOTE:** Until PR #12 lands with the Railway volume mount in place, **do not re-enable live trading**. We are flying blind without persistent trade history. The bot was paused via `POST /api/pause` at the end of this session — verify `paused=true` on next session start before doing anything else.
+
