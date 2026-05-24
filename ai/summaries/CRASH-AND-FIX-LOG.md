@@ -519,3 +519,132 @@ Split into two PRs for blast-radius safety, both merged to main same session:
 
 **AGENT NOTE — HARD RULE:**
 Any code path that reads "current price" or "current bid/ask" from a single live REST source is wrong by default. Always read from at least two sources (live + cached summary) and synthesize a fallback. The bar is: "if Kalshi REST returns 500 for 30 seconds, does TP/SL still fire?" If the answer is "we'd wait for the next tick," that is the bug. Also: when adding a new piece of decision logic that depends on market data, ALWAYS grep the same file for the word "orderbook" to confirm whether a fallback pattern already exists nearby — `scoreCandidate` had it for 6 weeks before this bug was found.
+
+---
+
+### CRASH-017 — Kalshi WS auth used PKCS1v15 + Bearer token (same bug as CRASH-009, in the WS file)
+**Date:** 2026-05-23 21:00 ET  
+**Found by:** Perplexity Computer — read kalshi_ws.py against docs.kalshi.com quick-start  
+**Severity:** crash (Kalshi feed permanently DISCONNECTED, /api/status shows kalshi: false)  
+**Status:** fixed  
+**Symptom:** Bot boots, REST calls succeed (positions/balance), but `kalshi_ws.connecting` is followed by `kalshi_ws.disconnected` on every reconnect attempt. Dashboard kalshi feed: DISCONNECTED.  
+**Root cause:** The WS file was still using the legacy auth that CRASH-009 fixed in `kalshi_rest.py`:  
+1. `padding.PKCS1v15()` instead of `padding.PSS(mgf=MGF1(SHA256), salt_length=32)` — Kalshi rejects all PKCS1v15 sigs with 401 on the handshake.  
+2. A single `Authorization: Bearer <token>` header instead of three separate `KALSHI-ACCESS-KEY` / `-TIMESTAMP` / `-SIGNATURE` headers.  
+**Fix:** Rewrote `kalshi_ws.py` `_build_auth_headers()` to mirror `KalshiRESTClient._sign()` exactly — RSA-PSS-SHA256 with `salt_length=hashes.SHA256().digest_size` (32 bytes), three KALSHI-ACCESS-* headers. Signature message format: `ts_ms + "GET" + "/trade-api/ws/v2"`.  
+**Branch:** `feature/kalshi-ws-live-wire`  
+**Pattern:** #auth, #signature, #regression-from-rest-file-only  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULE:**  
+Every Kalshi auth path — REST and WS — uses **identical** signing: RSA-PSS-SHA256 with salt=32, message `ts_ms + METHOD + path_with_prefix`, three KALSHI-ACCESS-* headers. There is no other valid scheme. If you ever see `padding.PKCS1v15` or `Authorization: Bearer` in this codebase, it is a bug. Period.
+
+---
+
+### CRASH-018 — Kalshi WS URL pointed at non-existent host `trading-api.kalshi.com`
+**Date:** 2026-05-23 21:00 ET  
+**Found by:** Perplexity Computer — verified at docs.kalshi.com/getting_started/quick_start_websockets  
+**Severity:** crash (WS handshake DNS fails on every connect)  
+**Status:** fixed  
+**Symptom:** `kalshi_ws.disconnected` immediately after `kalshi_ws.connecting`, with a connection or DNS error in the reason field on every reconnect attempt.  
+**Root cause:** Production WS URL was hardcoded to `wss://trading-api.kalshi.com/trade-api/ws/v2`. That host does not exist. The real production WS URL is `wss://api.elections.kalshi.com/trade-api/ws/v2` (same root host as the elections REST API). Demo WS at `wss://demo-api.kalshi.co/trade-api/ws/v2` is correct and unchanged.  
+**Fix:** Updated `_WS_BASE` in `kalshi_ws.py`:  
+- `KALSHI_ENV=production` → `wss://api.elections.kalshi.com/trade-api/ws/v2`  
+- otherwise → `wss://demo-api.kalshi.co/trade-api/ws/v2`  
+**Branch:** `feature/kalshi-ws-live-wire`  
+**Pattern:** #wrong-url, #regression-from-rest-file-only  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULE:**  
+Production REST: `https://api.elections.kalshi.com/trade-api/v2`. Production WS: `wss://api.elections.kalshi.com/trade-api/ws/v2`. Demo REST: `https://demo-api.kalshi.co/trade-api/v2`. Demo WS: `wss://demo-api.kalshi.co/trade-api/ws/v2`. There is no `trading-api.kalshi.com`. Verify against docs.kalshi.com before touching either URL.
+
+---
+
+### CRASH-019 — Kalshi WS used wrong field names, asks-side semantics, and an app-level ping loop
+**Date:** 2026-05-23 21:00 ET  
+**Found by:** Perplexity Computer — read docs.kalshi.com/websockets/orderbook-updates + cross-checked against parent repo research/adapted/kalshi-public-docs-api-websocket.md  
+**Severity:** crash (no orderbook ever populates; sigma + edge calcs would NaN even if connected)  
+**Status:** fixed  
+**Symptom:** Even after auth/URL fixed, `shared.latest_ob` was never populated — strategy decisions would log "no orderbook" forever.  
+**Root cause (4 sub-issues):**  
+1. Subscribed to channel name `orderbook` — the real channel is `orderbook_delta` (server then emits `orderbook_snapshot` once + `orderbook_delta` messages).  
+2. Tried to parse `bids` / `asks` arrays — Kalshi orderbooks are **bids-only** with binary reciprocity (`yes_ask = 1.00 - no_bid`). There is no asks payload.  
+3. Used integer-cents field names (`price`, `count`, `cost`) — real fields are fixed-point strings: `price_dollars`, `delta_fp`, `yes_dollars_fp` / `no_dollars_fp` snapshot arrays, `count_fp`, `yes_price_dollars`, `taker_fill_cost_dollars`, `maker_fill_cost_dollars`.  
+4. App-level `{cmd:"ping"}` loop every 30s — Kalshi protocol uses **library-level** WS ping/pong (the `websockets` library handles it automatically). Sending `cmd:"ping"` either is silently ignored or generates protocol errors.  
+**Fix:** Rewrote message handlers in `kalshi_ws.py`:  
+- Subscribe to `orderbook_delta`; handle both `orderbook_snapshot` (full state, authoritative) and `orderbook_delta` (incremental) message types.  
+- Maintain only `_yes_bids` and `_no_bids` dicts keyed by price-dollars string (avoids float-key drift).  
+- Derive `yes_ask = 1.00 - no_bid`, `no_ask = 1.00 - yes_bid` at snapshot emission.  
+- Removed app-level ping loop. Use `websockets.connect(..., ping_interval=10, ping_timeout=10)` so the library handles keep-alive.  
+- Convert fixed-point strings to ints/floats at the boundary so downstream code (paper.py, fsm.py, sizing.py) sees the legacy dataclass shape unchanged.  
+**Branch:** `feature/kalshi-ws-live-wire`  
+**Pattern:** #protocol-drift, #wrong-field-names, #wrong-channel-name  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULES:**  
+- Kalshi orderbook is BIDS-ONLY. Never write code that reads an `asks` array — it does not exist. Asks are derived: `yes_ask = 1.00 − no_bid`.  
+- Channel subscription name is `orderbook_delta`. Server sends `orderbook_snapshot` first, then `orderbook_delta` messages. Handle BOTH `type` values.  
+- Field names are fixed-point strings: `price_dollars`, `delta_fp`, `yes_dollars_fp`, `no_dollars_fp`, `count_fp`, `yes_price_dollars`, `taker_fill_cost_dollars`, `maker_fill_cost_dollars`. Convert at the boundary.  
+- Do NOT send app-level `{cmd:"ping"}`. The Python `websockets` library handles ping/pong at the protocol level. Pass `ping_interval=10` to `websockets.connect`.
+
+---
+
+### CRASH-020 — discover_active_kxbtc15m post-filter rejected every market because of status enum mismatch
+**Date:** 2026-05-23 21:00 ET  
+**Found by:** Perplexity Computer — fetched a real KXBTC15M response from /trade-api/v2/markets and saw response field `status: "active"`  
+**Severity:** crash (bot loops `boot.ticker_discovery_failed` every 60s, never reaches WS subscribe or trading loop)  
+**Status:** fixed  
+**Symptom:** Log line: `boot.ticker_discovery_failed — retrying in 60s` with error "No active KXBTC15M market found. The market may be between windows..." — the same anti-pattern the master prompt explicitly forbids.  
+**Root cause:** Kalshi uses two different status enums:  
+- Query parameter `status` accepts: `unopened | open | paused | closed | settled`  
+- Response field `status` returns:  `initialized | active | inactive | closed | determined | finalized`  
+The code passed `status=open` correctly (server returns the right markets), then post-filtered with `[m for m in markets if m.get("status") == "open"]` — but every market's response status is `"active"`, never `"open"`. Result: 50 markets returned by the server, all dropped, RuntimeError raised, 60s sleep, repeat forever.  
+**Fix:** Changed the post-filter to accept both response-side and query-side values: `m.get("status") in ("active", "open")`. The server-side `status=open` query parameter is what does the real work; the post-filter is now defensive only.  
+**Branch:** `feature/kalshi-ws-live-wire`  
+**Pattern:** #enum-mismatch, #query-vs-response-naming  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULE:**  
+Kalshi `status` is two different enums depending on where it appears. Query param `status=open` selects active windows; response objects come back with `status="active"`. Never filter response objects by `"open"`. If you must post-filter, accept the full set `{"active", "initialized", "open"}` or trust the server-side query filter and don't post-filter at all.
+
+---
+
+### CRASH-021 — Strike extracted from ticker string (KXBTC15M tickers do NOT encode the strike)
+**Date:** 2026-05-23 21:00 ET  
+**Found by:** Perplexity Computer — fetched real ticker `KXBTC15M-26MAY232130-30` from Kalshi REST and saw `floor_strike: 76702.37` on the market object  
+**Severity:** crash (strategy `kxbtc15m.evaluate` would treat strike=30 as the BTC strike level, comparing it to spot=104000 — every decision NO_TRADE, every signal junk)  
+**Status:** fixed  
+**Symptom:** Would have manifested as 100% NO_TRADE with regime/edge calcs degenerate because `btc_spot - strike` was always ≈ spot itself.  
+**Root cause:** `main.py:_parse_strike_from_ticker()` parsed the integer after `-T` or `-B`. Real KXBTC15M tickers have neither suffix and look like `KXBTC15M-26MAY232130-30`. The trailing `30` is a market index (Kalshi groups multiple binary contracts under one window with different strikes; each gets a sequential id 0..N). The actual strike (e.g. `76702.37`) lives on `market.floor_strike` (float) in the REST response.  
+**Fix:**  
+1. Added `KalshiRESTClient.get_floor_strike(ticker) -> Optional[float]` that calls `get_market(ticker)` and returns `float(market["floor_strike"])`.  
+2. Replaced `strike = _parse_strike_from_ticker(active_ticker)` in `main.py` with `strike = await rest.get_floor_strike(active_ticker)`.  
+3. Deleted `_parse_strike_from_ticker` (kept a comment marker explaining the deletion).  
+**Branch:** `feature/kalshi-ws-live-wire`  
+**Pattern:** #string-parsing-vs-api, #wrong-data-source  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULE:**  
+NEVER parse anything from a Kalshi ticker string except the `series_ticker` prefix. Tickers contain a window code and a sequential index — they do NOT encode strikes, sides, or prices. All numeric attributes (strike, fees, bid/ask, status) live on the market object returned by `GET /markets/{ticker}`. If you need a value, fetch the market.
+
+---
+
+### CRASH-022 — Live mode unreachable: APP_MODE != "paper" sys.exit(3) right before the trading loop
+**Date:** 2026-05-23 21:00 ET  
+**Found by:** Perplexity Computer + operator (operator explicitly wanted live, not paper)  
+**Severity:** blocker (no live trading possible — process exits at boot)  
+**Status:** fixed  
+**Symptom:** With `APP_MODE=safe-live` (or `production`), the bot logged `boot.live_mode_not_implemented` and exited with code 3 immediately before entering `_paper_loop`.  
+**Root cause:** Placeholder guard from initial paper-only scaffolding. Real order placement (`KalshiRESTClient.place_limit_order`) already existed; it just wasn't wired to the FSM/loop.  
+**Fix:**  
+1. Created `src/execution/live.py:LiveTrader` — mirrors `PaperTrader` public surface (`is_allowed_to_trade`, `log_decision`, `simulate_entry`, `begin_settlement`, `settle`, `simulated_balance` property) so `_paper_loop` needs no branching beyond trader instantiation.  
+2. `LiveTrader.is_allowed_to_trade()` refreshes the real Kalshi balance via REST and applies the same safety floor + consecutive-loss cooldown as paper.  
+3. `LiveTrader.simulate_entry()` transitions FSM to ENTERING **before** sending the order (so a crash mid-place is recoverable via reconcile by `client_order_id`), then places a real limit order, polls `/portfolio/fills` for ≤10s, transitions to POSITIONED when filled, or cancels + aborts on timeout.  
+4. `main.py` removed `sys.exit(3)` block and now picks `PaperTrader(fsm)` for `APP_MODE=paper` or `LiveTrader(fsm, rest)` otherwise.  
+**Branch:** `feature/kalshi-ws-live-wire`  
+**Pattern:** #scaffolding-not-implemented, #mode-gate  
+**Cross-repo:** Added to parent repo CRASH-AND-FIX-LOG.md.
+
+**AGENT NOTE — HARD RULE:**  
+`APP_MODE` controls trader selection only. Sizing caps (`MAX_CONTRACTS_PER_TRADE`, `MAX_RISK_PER_TRADE_USD`) are the operational dial between `safe-live` and `production` — there is no separate code path. All live entries go through `LiveTrader.simulate_entry` (named for paper-compat), which transitions FSM to ENTERING **before** placing the order so a process crash between place and fill can be reconciled by `client_order_id`.
+
