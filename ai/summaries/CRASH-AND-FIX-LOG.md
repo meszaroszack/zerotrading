@@ -725,3 +725,19 @@ BTC price feed for any bot running on Railway must use REST polling, never WebSo
 **Pattern:** #silent-swallow, #wrong-base-class, #observability  
 
 **AGENT NOTE:** When adding a `try/except` around log code, never bare-except. Use `except Exception as exc: sys.stderr.write(f"log emit failed: {exc}\n")` at minimum so future drift is loud. Silently broken observability is worse than a crash because the operator has no signal.
+
+### CRASH-028 — Kalshi feed marked stale on empty orderbook (liveness coupled to traffic)
+**Date:** 2026-05-23 22:50 ET  
+**Found by:** Perplexity Computer + operator (dashboard showed "Kalshi WS: DISCONNECTED" while `/api/status.kalshi_ws_healthy=false` and WS was actually connected)  
+**Severity:** blocker (FSM gates trading on `feed_health.is_healthy()` — a false-negative Kalshi liveness blocks ALL trades)  
+**Status:** fixed  
+**Symptom:** After PR #5 deployed, dashboard pill flipped red within ~30s of every fresh window. `/api/status` showed `kalshi_ws_healthy: false` while log_tail filled exclusively with `feed_health.stale feed=kalshi age_s=...` warnings. Kalshi REST `GET /markets/{ticker}/orderbook` returned `{yes_dollars:[], no_dollars:[]}` — confirming the orderbook was simply empty, not the WS dead.  
+**Root cause:** `FeedHealthMonitor.record_kalshi_update()` was only called from inside `on_orderbook()` in `main.py`. The 15-min markets are sparse — there is often zero orderbook traffic between trading windows. So a perfectly-healthy WS with no incoming deltas would age out at 30s and flip the feed "stale," blocking trades. The liveness signal was coupled to *traffic*, not *connection state*. Secondary issue: `_build_status()` called `feed_health.is_healthy()` on every dashboard poll (~1 Hz), which logs `feed_health.stale` warnings as a side-effect — drowning the 100-entry log buffer so other diagnostics were evicted.  
+**Fix:**  
+1. `KalshiWebSocketClient.is_connected` property — returns `self._ws is not None`. Authoritative liveness signal.  
+2. `main.py` adds `kalshi_heartbeat_task` — every 5 s, if `kalshi_ws.is_connected`, calls `feed_health.record_kalshi_update()`. Decouples liveness from orderbook traffic.  
+3. `FeedHealthMonitor.is_healthy(log_when_stale=True|False)` — dashboard polls pass `log_when_stale=False` via `status_dict()`. Stale warnings now only emit from the trading loop's health gate (~once per loop iteration), not from every dashboard request.  
+**Verification (local):** Smoke import OK; `KalshiWebSocketClient.is_connected == False` when ws handle is None; `status_dict()` returns the same boolean without logging.  
+**Pattern:** #liveness-vs-traffic, #sparse-market, #log-buffer-pollution  
+
+**AGENT NOTE:** Connection liveness ≠ message recency for thin-liquidity markets. Always derive the "is WS up" signal from the underlying transport's connection state, not from data callbacks. The heartbeat is the cheap, correct primitive. Also: anything reachable by the dashboard's `/api/status` runs at user-poll rate — never call a side-effecting function from inside the status builder. Status builders must be pure reads.
